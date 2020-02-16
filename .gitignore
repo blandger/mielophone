@@ -1,0 +1,8 @@
+# Default ignored files/folders
+**/debug
+**/target
+**/.idea*
+**/.vscode*
+/workspace.xml
+**/*.rs.bk
+Cargo.lock
