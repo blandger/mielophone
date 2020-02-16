@@ -1,6 +1,6 @@
 # Mielophone
 Funny research project about BLE device(s) functionality and data gathering.
-![Rust](https://github.com/blandger/mielophone/workflows/Rust/badge.svg?branch=master)
+[![Build Status](https://travis-ci.com/blandger/mielophone.svg?branch=master)](https://travis-ci.com/blandger/mielophone)
 
 ## Linux
 Console app should be run with 'sudo' privileges now
