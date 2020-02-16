@@ -13,7 +13,6 @@ use btleplug::bluez::{adapter::ConnectedAdapter, manager::Manager};
 use btleplug::api::{UUID, Central, Peripheral, Characteristic};
 
 
-
 fn main() {
     let manager = Manager::new().unwrap();
     let adapter_list = manager.adapters().unwrap();
@@ -27,14 +26,16 @@ fn main() {
             println!("adapter states : {:?}", connected_adapter.adapter.states);
             thread::sleep(Duration::from_secs(2));
             connected_adapter.start_scan().expect("Can't scan BLE adapter for connected devices...");
-//            let ble_device_list = connected_adapter.peripherals().iter()
-//                .find(|p| p.properties().local_name.iter().all(|name| name.contains("Neuro")));
+            thread::sleep(Duration::from_secs(2));
             if connected_adapter.peripherals().is_empty() {
                 eprintln!("->>> BLE peripheral devices were not found, sorry. Exiting...");
             } else {
-                for peripheral in connected_adapter.peripherals().iter() {
+                // filtering by name, here we are interested by only specific types of peripheral devices
+                for peripheral in connected_adapter.peripherals().iter()
+                .find(|p| p.properties().local_name.iter().all(|name| name.contains("Neuro"))) {
+//                for peripheral in connected_adapter.peripherals().iter() { // all peripheral devices in range
                     println!("peripheral : {:?} is connected: {:?}", peripheral.properties().local_name, peripheral.is_connected());
-                    if !peripheral.is_connected() {
+                    if peripheral.properties().local_name.is_some() && !peripheral.is_connected() {
                         println!("start connect to peripheral : {:?}...", peripheral.properties().local_name);
                         peripheral.connect().expect("Can't connect to peripheral...");
                         println!("now connected (\'{:?}\') to peripheral : {:?}...", peripheral.is_connected(), peripheral.properties().local_name);
@@ -47,6 +48,9 @@ fn main() {
                                 }
                             }
                         }
+                    } else {
+                        //sometimes peripheral is not discovered completely
+                        eprintln!("SKIP connect to UNKNOWN peripheral : {:?}", peripheral);
                     }
                 }
             }

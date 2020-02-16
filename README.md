@@ -4,9 +4,12 @@ Funny research project about BLE device(s) functionality and data gathering.
 
 ## Linux
 Console app should be run with 'sudo' privileges now
-### Some packages to install
 
-How to check if BLE devices are present on PC, output peripherals
+You can check if any BLE devices are present on PC, output peripherals to console like:
 https://unix.stackexchange.com/questions/96106/bluetooth-le-scan-as-non-root
 > sudo apt-get install libcap2-bin
+
+### Packages to install
+> sudo apt-get install clang
+ 
 
