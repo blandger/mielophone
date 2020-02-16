@@ -1,0 +1,12 @@
+[package]
+name = "console"
+version = "0.1.0"
+authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
+edition = "2018"
+description = "Simple console client app"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+btleplug = "0.4.0"
+rand = "0.4.2"
