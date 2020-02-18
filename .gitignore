@@ -4,5 +4,6 @@
 **/.idea*
 **/.vscode*
 /workspace.xml
+**/*.code-workspace
 **/*.rs.bk
 Cargo.lock
