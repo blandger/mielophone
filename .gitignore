@@ -4,6 +4,7 @@
 **/.idea*
 **/.vscode*
 /workspace.xml
+**/*.code-workspace
 **/*.rs.bk
 **/*.code-workspace
 **/workspace.code-workspace
