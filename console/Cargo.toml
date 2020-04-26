@@ -8,5 +8,5 @@ description = "Simple console client app"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = "0.4.0"
+btleplug = "0.4.2"
 rand = "0.4.2"

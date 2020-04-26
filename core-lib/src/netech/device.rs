@@ -57,8 +57,8 @@ struct ParameterInfo<'a> {
 }
 
 #[derive(Copy,Clone,Debug)]
-struct ParamInfoArray {
-    info_array: [ParameterInfo],
+struct ParamInfoArray<'a> {
+    info_array: [ParameterInfo<'a>],
     info_count: usize,
 }
 
