@@ -10,3 +10,5 @@ description = "Simple console client app"
 [dependencies]
 btleplug = "0.4.2"
 rand = "0.4.2"
+async-std = { version = "1.5.0", features = ["unstable"] }
+uuid = "0.8"
