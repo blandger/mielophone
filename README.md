@@ -11,6 +11,8 @@ https://unix.stackexchange.com/questions/96106/bluetooth-le-scan-as-non-root
 
 ### Packages to install
 > sudo apt-get install clang
+
+> sudo apt-get install dbus-devel
  
 
 ## Colibri R

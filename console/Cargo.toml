@@ -8,7 +8,7 @@ description = "Simple console client app"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = "0.4.2"
+btleplug = { version = "0.4", features = ["serde"] }
 rand = "0.4.2"
 async-std = { version = "1.5.0", features = ["unstable"] }
 uuid = "0.8"
