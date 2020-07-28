@@ -3,17 +3,25 @@ Funny research project about BLE device(s) functionality and data gathering.
 [![Build Status](https://travis-ci.com/blandger/mielophone.svg?branch=master)](https://travis-ci.com/blandger/mielophone)
 
 ## Linux
-Console app should be run with 'sudo' privileges now
+Usually console app should be run with 'sudo' privileges.
 
 You can check if any BLE devices are present on PC, output peripherals to console like:
 https://unix.stackexchange.com/questions/96106/bluetooth-le-scan-as-non-root
 > sudo apt-get install libcap2-bin
 
+#### Run BLE app without sudo privileges on Linux
+There is another receipt to run linux command for binary app like:
+
+> sudo setcap 'cap_net_raw,cap_net_admin+eip' /absolute/path/to/your/executable/file
+
+>sudo setcap 'cap_net_raw,cap_net_admin+eip' XXXX/mielophone/target/debug/console
+
+Unfortunately you have to run it after every app rebuild. 
+
 ### Packages to install
 > sudo apt-get install clang
 
 > sudo apt-get install dbus-devel
- 
 
 ## Colibri R
 Found BLE peripheral : 'Some("Neurotech_Colibri_R")' : address = [82, 173, 134, 228, 112, 224] is connected: false
