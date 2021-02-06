@@ -1,9 +1,7 @@
 language: rust
 
-addons:
-  apt:
-    packages:
-      - librust-libdbus-sys-dev
+before_install:
+  - sudo apt-get install librust-libdbus-sys-dev
 
 rust:
   - stable
