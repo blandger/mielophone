@@ -2,7 +2,7 @@ language: rust
 
 before_install:
   - sudo apt-get update
-  - sudo apt-get -y install librust-libdbus-sys-dev
+  - sudo apt-get -y install libdbus-1-dev
 
 rust:
   - stable
