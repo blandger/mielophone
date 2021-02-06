@@ -21,6 +21,10 @@ Unfortunately you have to run it after every app rebuild.
 ### Packages to install
 > sudo apt-get install clang
 
+> sudo apt-get install libdbus-1-dev
+
+OR
+
 > sudo apt-get install librust-libdbus-sys-dev
 
 ## Colibri R
