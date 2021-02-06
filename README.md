@@ -21,7 +21,7 @@ Unfortunately you have to run it after every app rebuild.
 ### Packages to install
 > sudo apt-get install clang
 
-> sudo apt-get install dbus-devel
+> sudo apt-get install librust-libdbus-sys-dev
 
 ## Colibri R
 Found BLE peripheral : 'Some("Neurotech_Colibri_R")' : address = [82, 173, 134, 228, 112, 224] is connected: false
