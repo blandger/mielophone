@@ -2,12 +2,13 @@
 name = "core-lib"
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Library wrapper above BLE to support limited device list"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = { version = "0.6", features = ["serde"] }
-async-std = { version = "1.5.0", features = ["unstable"] }
-uuid = "0.8"
+btleplug = { version = "0.10.4", features = ["serde"] }
+tokio = { version = "1.22.0", features = ["rt", "sync"] }
+tokio-stream = { version = "0.1.11", features = ["sync"] }
+uuid = "1.2.2"

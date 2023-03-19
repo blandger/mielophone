@@ -2,13 +2,30 @@
 name = "console"
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Simple console client app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = { version = "0.6", features = ["serde"] }
-rand = "0.4.2"
-async-std = { version = "1.5.0", features = ["unstable"] }
-uuid = "0.8"
+btleplug = { version = "0.10.4", features = ["serde"] }
+async-trait = "0.1.58"
+#log = "0.4.17"
+#rand = "0.8.5"
+core-lib = { path = "../core_lib" }
+
+bitflags = "1.3.2"
+thiserror = "1.0.37"
+uuid = "1.2.2"
+#serde_cr = { package = "serde", version = "1.0.147", features = ["derive"], default-features = false, optional = true }
+#serde_bytes = { version = "0.11.7", optional = true }
+#dashmap = "5.4.0"
+futures = "0.3.25"
+#static_assertions = "1.1.0"
+tokio = { version = "1.22.0", features = ["rt", "sync"] }
+tokio-stream = { version = "0.1.11", features = ["sync"] }
+pretty_env_logger = "0.4.0"
+
+[dev-dependencies]
+#pretty_env_logger = "0.4.0"
+tokio = { version = "1.22.0", features = ["macros", "rt", "rt-multi-thread"] }
