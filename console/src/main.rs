@@ -1,164 +1,95 @@
-use std::thread;
+// See the "macOS permissions note" in README.md before running this on macOS
+// Big Sur or later.
+
+use btleplug::api::{Central, CharPropFlags, Manager as _, Peripheral, ScanFilter};
+use btleplug::platform::Manager;
+use core_lib::brain_bit::{NOTIFY_CHARACTERISTIC_UUID, PERIPHERAL_NAME_MATCH_FILTER};
+use futures::stream::StreamExt;
+use std::error::Error;
 use std::time::Duration;
-use async_std::{
-    task,
-};
+use tokio::time;
 
-#[allow(unused_imports)]
-#[allow(dead_code)]
-#[cfg(target_os = "linux")]
-use btleplug::bluez::{adapter::Adapter, manager::Manager};
-#[allow(unused_imports)]
-#[cfg(target_os = "windows")]
-use btleplug::winrtble::{adapter::Adapter, manager::Manager};
-#[allow(unused_imports)]
-#[cfg(target_os = "macos")]
-use btleplug::corebluetooth::{adapter::Adapter, manager::Manager};
-#[allow(unused_imports)]
-use btleplug::api::{UUID, ValueNotification, Central, CentralEvent, Peripheral, Characteristic, CharPropFlags};
-use std::io::Cursor;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    pretty_env_logger::init();
 
-const PERIPHERAL_NAME_MATCH_FILTER:&'static str = "Neuro"; // string to match with BLE name
-const TRANSMIT_CHANNEL_CHARACTERISTIC: UUID = UUID::B128( // only NOTIFY type should be specified   s
-      [0x1B, 0xC5, 0xD5, 0xA5, 0x02, 0x00, 0xCF, 0x88, 0xE4, 0x11, 0xB9, 0xD6, 0x02, 0x00, 0x2F, 0x3D]);
-const RECEIVE_CHANNEL_CHARACTERISTIC: UUID = UUID::B128( // only NOTIFY type should be specified   s
-      [0x1B, 0xC5, 0xD5, 0xA5, 0x02, 0x00, 0xCF, 0x88, 0xE4, 0x11, 0xB9, 0xD6, 0x03, 0x00, 0x2F, 0x3D]);
-        //3D:2F:00:03:D6:B9:11:E4:88:CF:00:02:A5:D5:C5:1B
-// const DEVICE_COMMAND: UUID = UUID::B16(0x4600);
-// const DEVICE_COMMAND: Vec<u8> = vec![0x46];
+    let manager = Manager::new().await?;
+    let adapter_list = manager.adapters().await?;
+    if adapter_list.is_empty() {
+        eprintln!("No Bluetooth adapters found");
+    }
 
-#[cfg(target_os = "linux")]
-fn print_adapter_info(adapter: &Adapter) {
-    println!(
-        "connected adapter {:?} is powered: {:?}",
-        adapter.name(),
-        adapter.is_powered()
-    );
-}
+    for adapter in adapter_list.iter() {
+        println!("Starting scan...");
+        adapter
+            .start_scan(ScanFilter::default())
+            .await
+            .expect("Can't scan BLE adapter for connected devices...");
+        time::sleep(Duration::from_secs(2)).await;
+        let peripherals = adapter.peripherals().await?;
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-fn connect_to(adapter: &Adapter) -> &Adapter {
-    println!("adapter info can't be printed on Windows 10 or mac");
-}
-
-fn my_on_notification_handler(data: ValueNotification) {
-    println!("Received data from [{:?}] = {:?}", data.uuid, data.value.get(0));
-}
-
-/**
-If you are getting run time error like that :
- thread 'main' panicked at 'Can't scan BLE adapter for connected devices...: PermissionDenied', src/libcore/result.rs:1188:5
- you can try to run app with > sudo ./discover_adapters_peripherals
- on linux
-**/
-fn main() {
-    let manager = Manager::new().unwrap();
-    let adapter_list = manager.adapters().unwrap();
-    // let mut rx_thread_handle;
-
-    if adapter_list.len() <= 0 {
-        eprint!("Bluetooth adapter(s) were NOT found, sorry...\n");
-    } else {
-        for adapter in adapter_list.iter() {
-            println!("connecting to BLE adapter: ...");
-
-            print_adapter_info(&adapter);
-            adapter.start_scan().expect("Can't scan BLE adapter for connected devices...");
-            thread::sleep(Duration::from_secs(2));
-
-            if adapter.peripherals().is_empty() {
-                eprintln!("->>> BLE peripheral devices were not found, sorry. Exiting...");
-            } else {
-                // all peripheral devices in range
-                for peripheral in adapter.peripherals().iter() {
-                    println!("peripheral : {:?} is connected: {:?}", peripheral.properties().local_name, peripheral.is_connected());
-                    // filter needed peripheral
-                    if peripheral.properties().local_name.is_some()
-                        && !peripheral.is_connected()
-                        && peripheral.properties().local_name.unwrap().contains(PERIPHERAL_NAME_MATCH_FILTER) {
-                        println!("start connect to peripheral : {:?}...", peripheral.properties().local_name);
-                        peripheral.connect().expect("Can't connect to peripheral...");
-                        println!("now connected (\'{:?}\') to peripheral : {:?}...", peripheral.is_connected(), peripheral.properties().local_name);
-                        let chars = peripheral.discover_characteristics();
-                        if peripheral.is_connected() {
-                            println!("Discover peripheral : \'{:?}\' characteristics...", peripheral.properties().local_name);
-                            for chars_vector in chars.into_iter() {
-                                for char_item in chars_vector.iter() {
-                                    println!("Checking CHARACTERISTIC : {:?} ", char_item.uuid);
-                                    // subscribe on selected chars
-                                    if char_item.uuid == RECEIVE_CHANNEL_CHARACTERISTIC
-                                        && char_item.properties == CharPropFlags::NOTIFY {
-                                        println!("Lets try subscribe to desired CHARACTERISTIC...: {:?}", char_item.uuid);
-                                        // do subscribe
-                                        //     peripheral.on_notification(Box::new(my_on_notification_handler));
-                                        peripheral.on_notification(
-                                            Box::new(|data: ValueNotification| {
-                                                let mut rdr = Cursor::new(data.value);
-                                                println!("Received data from [{:?}] = {:?}", data.uuid, rdr);
-                                            })
-                                        );
-                                        let subscribe_result = peripheral.subscribe(&char_item);
-                                        let is_subscribed = subscribe_result.is_ok();
-                                        println!("Is subscribed? = {}", is_subscribed);
-                                        loop {
-                                            thread::sleep(Duration::from_millis(1));
-                                        }
-                                    }
-/*                                    if char_item.uuid == TRANSMIT_CHANNEL_CHARACTERISTIC
-                                        /*&& char_item.properties == CharPropFlags::WRITE*/ {
-                                        // send command to device
-                                        println!("Lets send command to CHARACTERISTIC...: {:?}", char_item.uuid);
-                                        let DEVICE_COMMAND = vec![0x46];
-                                        let connect_result = peripheral.command(&char_item, &DEVICE_COMMAND);
-                                        println!("Sent command OK? = {:?}", connect_result.is_ok());
-                                        while connect_result.is_ok() {
-                                            print!(".");
-                                            thread::sleep(Duration::from_millis(10));
-                                        }
-                                    }*/
+        if peripherals.is_empty() {
+            eprintln!("->>> BLE peripheral devices were not found, sorry. Exiting...");
+        } else {
+            // All peripheral devices in range.
+            for peripheral in peripherals.iter() {
+                let properties = peripheral.properties().await?;
+                let is_connected = peripheral.is_connected().await?;
+                let local_name = properties
+                    .unwrap()
+                    .local_name
+                    .unwrap_or(String::from("(peripheral name unknown)"));
+                println!(
+                    "Peripheral {:?} is connected: {:?}",
+                    &local_name, is_connected
+                );
+                // Check if it's the peripheral we want.
+                if local_name.contains(PERIPHERAL_NAME_MATCH_FILTER) {
+                    println!("Found matching peripheral {:?}...", &local_name);
+                    if !is_connected {
+                        // Connect if we aren't already connected.
+                        if let Err(err) = peripheral.connect().await {
+                            eprintln!("Error connecting to peripheral, skipping: {}", err);
+                            continue;
+                        }
+                    }
+                    let is_connected = peripheral.is_connected().await?;
+                    println!(
+                        "Now connected ({:?}) to peripheral {:?}.",
+                        is_connected, &local_name
+                    );
+                    if is_connected {
+                        println!("Discover peripheral {:?} services...", local_name);
+                        peripheral.discover_services().await?;
+                        for characteristic in peripheral.characteristics() {
+                            println!("Checking characteristic {:?}", characteristic);
+                            // Subscribe to notifications from the characteristic with the selected
+                            // UUID.
+                            if characteristic.uuid == NOTIFY_CHARACTERISTIC_UUID
+                                && characteristic.properties.contains(CharPropFlags::NOTIFY)
+                            {
+                                println!("Subscribing to characteristic {:?}", characteristic.uuid);
+                                peripheral.subscribe(&characteristic).await?;
+                                // Print the first 4 notifications received.
+                                let mut notification_stream =
+                                    peripheral.notifications().await?.take(4);
+                                // Process while the BLE connection is not broken or stopped.
+                                while let Some(data) = notification_stream.next().await {
+                                    println!(
+                                        "Received data from {:?} [{:?}]: {:?}",
+                                        local_name, data.uuid, data.value
+                                    );
                                 }
                             }
-
-                            println!("disconnecting from peripheral : {:?}...", peripheral.properties().local_name);
-                            peripheral.disconnect().expect("Error on disconnecting from BLE peripheral");
                         }
-                    } else {
-                        //sometimes peripheral is not discovered completely
-                        eprintln!("SKIP connect to UNKNOWN peripheral : {:?}", peripheral);
+                        println!("Disconnecting from peripheral {:?}...", local_name);
+                        peripheral.disconnect().await?;
                     }
+                } else {
+                    println!("Skipping unknown peripheral {:?}", peripheral);
                 }
             }
         }
     }
+    Ok(())
 }
-
-/*                            let (event_sender, event_receiver) = channel(256);
-
-                            let on_event = move |event: CentralEvent| match event {
-                                CentralEvent::DeviceDiscovered(bd_addr) => {
-                                    println!("DeviceDiscovered: {:?}", bd_addr);
-                                    let s = event_sender.clone();
-                                    let e = event.clone();
-                                    task::spawn(async move {
-                                        s.send(e).await;
-                                    });
-                                }
-                                CentralEvent::DeviceConnected(bd_addr) => {
-                                    println!("DeviceConnected: {:?}", bd_addr);
-                                    let s = event_sender.clone();
-                                    let e = event.clone();
-                                    task::spawn(async move {
-                                        s.send(e).await;
-                                    });
-                                }
-                                CentralEvent::DeviceDisconnected(bd_addr) => {
-                                    println!("DeviceDisconnected: {:?}", bd_addr);
-                                    let s = event_sender.clone();
-                                    let e = event.clone();
-                                    task::spawn(async move {
-                                        s.send(e).await;
-                                    });
-                                }
-                                _ => {}
-                            };
-                            connected_adapter.on_event(Box::new(on_event));*/
