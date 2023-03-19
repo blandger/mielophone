@@ -1,3 +1,5 @@
+pub mod brain_bit;
+
 #[cfg(test)]
 mod tests {
     #[test]
