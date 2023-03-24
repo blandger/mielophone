@@ -1,6 +1,7 @@
 # Mielophone
 Funny research project about BLE device(s) functionality and data gathering.
-[![Build Status](https://travis-ci.com/blandger/mielophone.svg?branch=master)](https://travis-ci.com/blandger/mielophone)
+
+[![Travis Build Status](https://travis-ci.com/blandger/mielophone.svg?branch=master)](https://travis-ci.com/blandger/mielophone) + ![Actions Build Status](https://github.com/blandger/mielophone/.github/workflows/main.yml/badge.svg?branch=feature-1)
 
 ## Linux
 Usually console app should be run with 'sudo' privileges.
@@ -79,3 +80,24 @@ DeviceDiscovered: E0:70:E4:86:AD:52 // ColibriR
 Count = 3
 Count = 8
 DeviceDiscovered: E6:6B:0A:94:13:47 // BB - old
+
+
+Win10 - subscribe run
+===================
+Peripheral "BrainBit" is connected: false
+Found matching peripheral "BrainBit"...
+Now connected (true) to peripheral "BrainBit".
+Discover peripheral "BrainBit" services...
+Checking characteristic Characteristic { uuid: 00002a00-0000-1000-8000-00805f9b34fb, service_uuid: 00001800-0000-1000-8000-00805f9b34fb, properties: READ | WRITE }
+Checking characteristic Characteristic { uuid: 00002a01-0000-1000-8000-00805f9b34fb, service_uuid: 00001800-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 00002a04-0000-1000-8000-00805f9b34fb, service_uuid: 00001800-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 00002a05-0000-1000-8000-00805f9b34fb, service_uuid: 00001801-0000-1000-8000-00805f9b34fb, properties: INDICATE }
+Checking characteristic Characteristic { uuid: 00002a24-0000-1000-8000-00805f9b34fb, service_uuid: 0000180a-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 00002a25-0000-1000-8000-00805f9b34fb, service_uuid: 0000180a-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 00002a26-0000-1000-8000-00805f9b34fb, service_uuid: 0000180a-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 00002a27-0000-1000-8000-00805f9b34fb, service_uuid: 0000180a-0000-1000-8000-00805f9b34fb, properties: READ }
+Checking characteristic Characteristic { uuid: 6e400002-b534-f393-68a9-e50e24dcca9e, service_uuid: 6e400001-b534-f393-68a9-e50e24dcca9e, properties: READ | NOTIFY }
+Checking characteristic Characteristic { uuid: 6e400003-b534-f393-68a9-e50e24dcca9e, service_uuid: 6e400001-b534-f393-68a9-e50e24dcca9e, properties: WRITE }
+Checking characteristic Characteristic { uuid: 6e400004-b534-f393-68a9-e50e24dcca9e, service_uuid: 6e400001-b534-f393-68a9-e50e24dcca9e, properties: NOTIFY }
+Disconnecting from peripheral "BrainBit"...
+Peripheral "(peripheral name unknown)" is connected: false
