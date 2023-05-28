@@ -3,8 +3,8 @@
 
 use btleplug::api::{Central, CharPropFlags, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::Manager;
-use core_lib::brain_bit::{NOTIFY_CHARACTERISTIC_UUID, PERIPHERAL_NAME_MATCH_FILTER};
 use futures::stream::StreamExt;
+use lib::bbit::constants::{EEG_DATA_NOTIFY_CHARACTERISTIC_UUID, PERIPHERAL_NAME_MATCH_FILTER};
 use std::error::Error;
 use std::time::Duration;
 use tokio::time;
@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             println!("Checking characteristic {:?}", characteristic);
                             // Subscribe to notifications from the characteristic with the selected
                             // UUID.
-                            if characteristic.uuid == NOTIFY_CHARACTERISTIC_UUID
+                            if characteristic.uuid == EEG_DATA_NOTIFY_CHARACTERISTIC_UUID
                                 && characteristic.properties.contains(CharPropFlags::NOTIFY)
                             {
                                 println!("Subscribing to characteristic {:?}", characteristic.uuid);

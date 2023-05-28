@@ -1,4 +1,4 @@
-pub mod brain_bit;
+pub mod bbit;
 
 #[cfg(test)]
 mod tests {

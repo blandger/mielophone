@@ -1,6 +1,6 @@
 use std::vec::Vec;
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum DeviceGattType {
     BrainBit,
     ColibriRed,
@@ -8,15 +8,6 @@ pub enum DeviceGattType {
     ColibriYellow,
     ColibriWhite,
 }
-
-#[derive(Copy,Clone,Debug)]
-enum DeviceType {
-    Brainbit,
-    Callibri,
-    Unknown,
-}
-
-pub const GENERIC_ACCESS_UUID: String = String::from("00001800-0000-1000-8000-00805F9B34FB");
 
 pub trait DeviceGattInfo {
     fn device_service_uuid() -> String;
@@ -46,6 +37,6 @@ impl DeviceGattInfo for BrainbitGattInfo {
     }
 
     fn get_valid_bt_names() -> Vec<String> {
-        vec!("NeuroBLE", "BrainBit")
+        vec!["NeuroBLE", "BrainBit"]
     }
 }

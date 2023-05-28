@@ -1,14 +1,20 @@
 [package]
-name = "core-lib"
+name = "lib"
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
 edition = "2021"
 description = "Library wrapper above BLE to support limited device list"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[registries.crates-io]
+protocol = "sparse"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-btleplug = { version = "0.10.4", features = ["serde"] }
+async-trait = "0.1"
+futures = "0.3"
+btleplug = { version = "0.10.5", features = ["serde"] }
+
+thiserror = "1.0.40"
 tokio = { version = "1.22.0", features = ["rt", "sync"] }
 tokio-stream = { version = "0.1.11", features = ["sync"] }
-uuid = "1.2.2"
+uuid = "1.3.3"

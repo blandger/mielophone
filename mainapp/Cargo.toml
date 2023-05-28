@@ -1,26 +1,27 @@
 [package]
-name = "console"
+name = "main-app"
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
 edition = "2021"
 description = "Simple console client app"
 
+[registries.crates-io]
+protocol = "sparse"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = { version = "0.10.4", features = ["serde"] }
+lib = { path = "../lib" }
 async-trait = "0.1.58"
-#log = "0.4.17"
-#rand = "0.8.5"
-core-lib = { path = "../core_lib" }
+futures = "0.3"
+btleplug = { version = "0.10.5", features = ["serde"] }
 
-bitflags = "1.3.2"
-thiserror = "1.0.37"
-uuid = "1.2.2"
+bitflags = "2.3.1"
+thiserror = "1.0.40"
+uuid = "1.3.3"
 #serde_cr = { package = "serde", version = "1.0.147", features = ["derive"], default-features = false, optional = true }
 #serde_bytes = { version = "0.11.7", optional = true }
 #dashmap = "5.4.0"
-futures = "0.3.25"
 #static_assertions = "1.1.0"
 tokio = { version = "1.22.0", features = ["rt", "sync"] }
 tokio-stream = { version = "0.1.11", features = ["sync"] }
