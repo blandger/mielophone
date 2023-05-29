@@ -1,7 +1,20 @@
 use std::vec::Vec;
 
-#[derive(Copy,Clone,Debug)]
-pub enum Command {
+/// Structure to contain EEG data and interval.
+#[derive(Debug, Clone)]
+pub struct EegData {
+    data: i16,
+    index: u8,
+}
+/// Structure to contain EEG data and interval.
+#[derive(Debug, Clone)]
+pub struct CommandData {
+    data: i16,
+    cmd_type: CommandType,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum CommandType {
     CommandStartSignal,
     CommandStopSignal,
     CommandStartResist,
@@ -17,14 +30,14 @@ pub enum Command {
     CommandFindMe,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct CommandArray {
     cmd_array: [Command],
     cmd_array_size: usize,
 }
 
-#[derive(Copy,Clone,Debug)]
-pub enum Parameter{
+#[derive(Copy, Clone, Debug)]
+pub enum Parameter {
     ParameterName,
     ParameterState,
     ParameterAddress,
@@ -41,14 +54,14 @@ pub enum Parameter{
     ParameterStimulatorAndMAState,
     ParameterStimulatorParamPack,
     ParameterMotionAssistantParamPack,
-    ParameterFirmwareVersion
+    ParameterFirmwareVersion,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ParamAccess {
     Read,
     ReadWrite,
-    ReadNotify
+    ReadNotify,
 }
 
 struct ParameterInfo<'a> {
@@ -56,13 +69,13 @@ struct ParameterInfo<'a> {
     access: &'a ParamAccess,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 struct ParamInfoArray<'a> {
     info_array: [ParameterInfo<'a>],
     info_count: usize,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ChannelType {
     ChannelTypeSignal,
     ChannelTypeBattery,
@@ -73,7 +86,7 @@ pub enum ChannelType {
     ChannelTypeConnectionStats,
     ChannelTypeResistance,
     ChannelTypePedometer,
-    ChannelTypeCustom
+    ChannelTypeCustom,
 }
 
 /*
