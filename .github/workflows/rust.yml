@@ -1,17 +1,29 @@
 name: Rust
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install xmllint
+    - name: Set up Rust
+      uses: actions/checkout@v2
+    - name: Install cargo audit
+      run: cargo install cargo-audit
+    - name: Install btleplug libraries
       run: sudo apt install libdbus-1-dev pkg-config
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Run Clippy
+      run: cargo clippy --verbose --D warnings
+    - name: Audit
+      run: cargo audit
