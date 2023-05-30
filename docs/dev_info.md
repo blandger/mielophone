@@ -1,18 +1,18 @@
 ## BrainBit BLE info
 
-| Service UUID                         |         Characteristic UUID          | Ch.Attributes |         Description         |
-|:-------------------------------------|:------------------------------------:|:--------------|:---------------------------:|
-| 00001800-0000-1000-8000-00805F9B34FB | 00002A00-0000-1000-8000-00805F9B34FB | READ / WRITE  |              -              |
-|                                      | 00002A01-0000-1000-8000-00805F9B34FB | READ          |              -              |
-|                                      | 00002A04-0000-1000-8000-00805F9B34FB | READ          |              -              |
-| 00001801-0000-1000-8000-00805F9B34FB | 00002A05-0000-1000-8000-00805F9B34FB | INDICATE      |              -              |
-| Device Information Service           | 00002A24-0000-1000-8000-00805F9B34FB | READ          |     Device Model number     |
-|                                      | 00002A25-0000-1000-8000-00805F9B34FB | READ          |    Device Serial number     |
-|                                      | 00002A26-0000-1000-8000-00805F9B34FB | READ          |  Hardware Revision number   |
-|                                      | 00002A27-0000-1000-8000-00805F9B34FB | READ          |  Firmware Revision number   |
-| 6E400001-B534-F393-68A9-E50E24DCCA9E | 6E400002-B534-F393-68A9-E50E24DCCA9E | READ / NOTIFY |    Device status / state    |
-| Neurotech Signal Service2            | 6E400003-B534-F393-68A9-E50E24DCCA9E | WRITE         | TR commands / manage device |
-|                                      | 6E400004-B534-F393-68A9-E50E24DCCA9E | NOTIFY        |      Receive data (rx)      |
+| Service UUID                         |         Characteristic UUID          | Ch.Attributes |                Description                 |
+|:-------------------------------------|:------------------------------------:|:--------------|:------------------------------------------:|
+| 00001800-0000-1000-8000-00805F9B34FB | 00002A00-0000-1000-8000-00805F9B34FB | READ / WRITE  |                Device Name                 |
+| Generic Access Service               | 00002A01-0000-1000-8000-00805F9B34FB | READ          |                 Appearance                 |
+|                                      | 00002A04-0000-1000-8000-00805F9B34FB | READ          | Peripheral Preferred Connection Parameters |
+| 00001801-0000-1000-8000-00805F9B34FB | 00002A05-0000-1000-8000-00805F9B34FB | INDICATE      |                     -                      |
+| Device Information Service /         | 00002A24-0000-1000-8000-00805F9B34FB | READ          |            Device Model number             |
+| Generic Attribute                    | 00002A25-0000-1000-8000-00805F9B34FB | READ          |            Device Serial number            |
+|                                      | 00002A26-0000-1000-8000-00805F9B34FB | READ          |          Hardware Revision number          |
+|                                      | 00002A27-0000-1000-8000-00805F9B34FB | READ          |          Firmware Revision number          |
+| 6E400001-B534-F393-68A9-E50E24DCCA9E | 6E400002-B534-F393-68A9-E50E24DCCA9E | READ / NOTIFY |           Device status / state            |
+| Neurotech Signal Service2            | 6E400003-B534-F393-68A9-E50E24DCCA9E | WRITE         |       Commands / manage device (tx)        |
+|                                      | 6E400004-B534-F393-68A9-E50E24DCCA9E | NOTIFY        |             Receive data (rx)              |
 
 
 ## Colibri R
