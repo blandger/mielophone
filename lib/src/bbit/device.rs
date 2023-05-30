@@ -85,8 +85,8 @@ impl BleSensor<Bluetooth> {
     /// ```rust,no_run
     /// # #[tokio::main]
     /// # async fn main() {
-    /// use bbit::{Error};
-    /// use bbit::device::BleSensor;
+    /// use lib::Error;
+    /// use lib::bbit::device::BleSensor;
     ///
     /// let mut bbit = BleSensor::new().await.unwrap()
     ///     // default handling that is applied to BleSensor::block_connect
