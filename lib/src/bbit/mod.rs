@@ -1,5 +1,7 @@
-pub mod constants;
+pub(crate) mod control;
 pub mod device;
+pub mod eeg_uuids;
+pub(crate) mod sealed;
 
 /// A device's state/mode type
 // Probably it's returned from UUID = 6E400002-B534-F393-68A9-E50E24DCCA9E (READ / NOTIFY)

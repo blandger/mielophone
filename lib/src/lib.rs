@@ -1,10 +1,11 @@
 pub mod bbit;
 
-use crate::bbit::device::{BleSensor, CommandData, EegData};
+use crate::bbit::device::{BBitResult, CommandData, EegData};
 pub use async_trait::async_trait;
+use btleplug::api::{Characteristic, Peripheral as _};
+use btleplug::platform::Peripheral;
 use thiserror::Error;
-
-pub type BBitResult<T> = Result<T, Error>;
+use uuid::Uuid;
 
 /// Error type for general lib errors and internal btleplug Ble errors
 #[derive(Debug, Error)]
@@ -22,8 +23,8 @@ pub enum Error {
     #[error("Characteristic not found")]
     CharacteristicNotFound,
     /// EEG Data packets received from device is not parsed
-    #[error("Invalid data")]
-    InvalidData,
+    #[error("Invalid data '{0}'")]
+    InvalidData(String),
     /// The command did not return a response
     #[error("No command response")]
     NoControlPointResponse,
@@ -34,7 +35,7 @@ pub enum Error {
 
 /// Base trait for handling events coming from a BrainBit device.
 #[async_trait]
-pub trait EventHandler: Send + Sync {
+pub trait EventHandler {
     /// Dispatched when a battery update is received.
     ///
     /// Contains the current battery level.
@@ -43,12 +44,12 @@ pub trait EventHandler: Send + Sync {
     /// Dispatched when an eeg data is received.
     ///
     /// Contains information about the O1, O2, T3, T4 + interval.
-    async fn eeg_update(&self, _ctx: &BleSensor, _eeg_data: EegData) {}
+    async fn eeg_update(&self, _eeg_data: EegData) {}
 
     /// Dispatched when measurement data is received over the PMD data UUID.
     ///
     /// Contains data in a [`PmdRead`].
-    async fn send_command(&self, _ctx: &BleSensor, _data: CommandData) {}
+    async fn send_command(&self, _data: CommandData) {}
 
     /// Checked at start of each event loop.
     ///
@@ -56,6 +57,16 @@ pub trait EventHandler: Send + Sync {
     async fn should_continue(&self) -> bool {
         true
     }
+}
+
+/// Private helper to find characteristics from a [`Uuid`].
+async fn find_characteristic(device: &Peripheral, uuid: Uuid) -> BBitResult<Characteristic> {
+    device
+        .characteristics()
+        .iter()
+        .find(|c| c.uuid == uuid)
+        .ok_or(Error::CharacteristicNotFound)
+        .cloned()
 }
 
 #[cfg(test)]
