@@ -3,9 +3,15 @@
 **/target
 **/.idea*
 **/.vscode*
-/workspace.xml
+**/workspace.xml
 **/*.code-workspace
 **/*.rs.bk
-**/*.code-workspace
 **/workspace.code-workspace
+**/shelf/
+# Editor-based HTTP Client requests
+**/httpRequests/
+# Datasource local storage ignored files
+**/dataSources/
+**/dataSources.local.xml
+
 Cargo.lock

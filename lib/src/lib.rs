@@ -1,5 +1,11 @@
 pub mod bbit;
 
+use crate::bbit::device::{BleSensor, CommandData, EegData};
+pub use async_trait::async_trait;
+use thiserror::Error;
+
+pub type BBitResult<T> = Result<T, Error>;
+
 /// Error type for general lib errors and internal btleplug Ble errors
 #[derive(Debug, Error)]
 pub enum Error {

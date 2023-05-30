@@ -1,4 +1,9 @@
-use std::vec::Vec;
+use crate::EventHandler;
+use btleplug::{
+    api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
+    platform::{Manager, Peripheral},
+};
+use std::sync::Arc;
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
@@ -13,7 +18,25 @@ pub struct CommandData {
     cmd_type: CommandType,
 }
 
-#[derive(Copy, Clone, Debug)]
+/// The core sensor manager
+pub struct BleSensor {
+    /// BLE connection manager
+    ble_manager: Manager,
+    /// Connected and controlled device
+    ble_device: Option<Peripheral>,
+    /// Handler for callback events
+    event_handler: Option<Arc<dyn EventHandler>>,
+    /// Device manage and send commands
+    control_point: Option<ControlPoint>,
+}
+
+/// Struct that has access to command point.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ControlPoint {
+    control_point: Characteristic,
+}
+
+#[derive(Clone, Debug)]
 pub enum CommandType {
     CommandStartSignal,
     CommandStopSignal,
@@ -30,13 +53,13 @@ pub enum CommandType {
     CommandFindMe,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct CommandArray {
-    cmd_array: [Command],
+#[derive(Clone, Debug)]
+pub struct CommandArray<'a> {
+    cmd_array: &'a [CommandData],
     cmd_array_size: usize,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Parameter {
     ParameterName,
     ParameterState,
@@ -62,17 +85,6 @@ pub enum ParamAccess {
     Read,
     ReadWrite,
     ReadNotify,
-}
-
-struct ParameterInfo<'a> {
-    parameter: &'a Parameter,
-    access: &'a ParamAccess,
-}
-
-#[derive(Copy, Clone, Debug)]
-struct ParamInfoArray<'a> {
-    info_array: [ParameterInfo<'a>],
-    info_count: usize,
 }
 
 #[derive(Copy, Clone, Debug)]
