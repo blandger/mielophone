@@ -8,7 +8,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "mainapp=DEBUG,bbit=DEBUG".into()),
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "battery_level=DEBUG,bbit=DEBUG".into()),
         )
         .init();
 
@@ -19,11 +20,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await
         .unwrap();
 
-    tracing::info!("connected !");
+    tracing::info!("BrainBit is connected");
 
     // Following error is possible on Linux !
     // thread 'main' panicked at 'Can't get Battery Level due to error...: BleError(Other(DbusError(
     // D-Bus error: Read not permitted (org.bluez.Error.NotPermitted))))', mainapp/src/main.rs
+    // See README.MD for chapter = Run BLE app without sudo privileges on Linux
     tracing::info!(
         "battery level is: {}%",
         connected

@@ -1,5 +1,7 @@
 [workspace]
 members = [
     "mainapp",
-    "lib"
+    "lib",
+    "examples/connect",
+    "examples/battery_level"
 ]
