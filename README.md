@@ -13,9 +13,9 @@ https://unix.stackexchange.com/questions/96106/bluetooth-le-scan-as-non-root
 #### Run BLE app without sudo privileges on Linux
 There is another receipt to run linux command for binary app like:
 
-> sudo setcap 'cap_net_raw,cap_net_admin+eip' /absolute/path/to/your/executable/file
+>sudo setcap 'cap_net_raw,cap_net_admin+eip' ./path/to/your/executable/file
 
->sudo setcap 'cap_net_raw,cap_net_admin+eip' XXXX/mielophone/target/debug/console
+>sudo setcap 'cap_net_raw,cap_net_admin+eip' ./target/debug/battery_level
 
 Unfortunately you have to run it after every app rebuild. 
 

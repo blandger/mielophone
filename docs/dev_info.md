@@ -10,6 +10,9 @@
 | Generic Attribute                    | 00002A25-0000-1000-8000-00805F9B34FB | READ          |            Device Serial number            |
 |                                      | 00002A26-0000-1000-8000-00805F9B34FB | READ          |          Hardware Revision number          |
 |                                      | 00002A27-0000-1000-8000-00805F9B34FB | READ          |          Firmware Revision number          |
+| 0000180A-0000-1000-8000-00805F9B34FB |                 ????                 | ??            |                                            |
+| Device Information                   |                                      |               |                                            |
+|                                      |                                      |               |                                            |
 | 6E400001-B534-F393-68A9-E50E24DCCA9E | 6E400002-B534-F393-68A9-E50E24DCCA9E | READ / NOTIFY |           Device status / state            |
 | Neurotech Signal Service2            | 6E400003-B534-F393-68A9-E50E24DCCA9E | WRITE         |       Commands / manage device (tx)        |
 |                                      | 6E400004-B534-F393-68A9-E50E24DCCA9E | NOTIFY        |             Receive data (rx)              |
