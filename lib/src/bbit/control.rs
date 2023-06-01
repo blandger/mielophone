@@ -1,4 +1,4 @@
-use crate::bbit::device::BBitResult;
+use crate::bbit::device::{BBitResult, CommandData};
 use crate::bbit::eeg_uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
@@ -39,4 +39,11 @@ impl ControlPoint {
             .await
             .map_err(Error::BleError)
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ControlPointCommand {
+    CommandStartSignal,
+    CommandStopSignal,
+    CommandStartResist,
 }

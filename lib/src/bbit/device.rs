@@ -1,30 +1,25 @@
-use crate::bbit::control::ControlPoint;
-use crate::bbit::eeg_uuids::{EventType, NotifyStream, PERIPHERAL_NAME_MATCH_FILTER};
+use crate::bbit::control::{ControlPoint, ControlPointCommand};
+use crate::bbit::eeg_uuids::{EventType, NotifyStream, NotifyUuid, PERIPHERAL_NAME_MATCH_FILTER};
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::{Error, EventHandler};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
 };
+use futures::stream::{self, StreamExt};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::instrument;
+use tracing::{instrument, Event};
 
 pub type BBitResult<T> = Result<T, Error>;
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
-pub struct EegData {
-    data: i16,
-    index: u8,
-}
-/// Structure to contain EEG data and interval.
-#[derive(Debug, Clone)]
 pub struct CommandData {
     data: i16,
-    cmd_type: CommandType,
+    cmd_type: ControlPointCommand,
 }
 
 /// The core sensor manager
@@ -65,6 +60,8 @@ impl BleSensor<Bluetooth> {
                 Ok(_) => {}
             }
         }
+        tracing::debug!("BLE is connected...");
+
         let new_self: BleSensor<Configure> = BleSensor {
             ble_manager: self.ble_manager,
             ble_device: self.ble_device,
@@ -90,7 +87,7 @@ impl BleSensor<Bluetooth> {
     ///
     /// let mut bbit = BleSensor::new().await.unwrap()
     ///     // default handling that is applied to BleSensor::block_connect
-    ///     .map_connect("7B45F72B", |r| {
+    ///     .map_connect("BrainBit", |r| {
     ///         match r {
     ///             Err(e @ Error::NoBleAdaptor) => {
     ///                 tracing::error!("no bluetooth adaptors found");
@@ -141,7 +138,7 @@ impl BleSensor<Bluetooth> {
         false
     }
 
-    /// Try to connect to a device. Implements the v1 [`crate::BleSensor::connect`] function
+    /// Try to connect to a device. Implements the [`crate::BleSensor::connect`] function
     #[instrument(skip(self))]
     async fn try_connect(&mut self, device_name: &str) -> BBitResult<()> {
         tracing::debug!("trying to connect");
@@ -155,6 +152,7 @@ impl BleSensor<Bluetooth> {
             return Err(Error::NoBleAdaptor);
         };
 
+        tracing::debug!("start scanning for 2 sec...");
         central.start_scan(ScanFilter::default()).await?;
         tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -177,59 +175,16 @@ impl BleSensor<Bluetooth> {
             tracing::warn!("device not found");
             return Err(Error::NoDevice);
         };
+        tracing::debug!("BLE is found, try to connect...");
 
         device.connect().await?;
+        tracing::debug!("Try to discover...");
         device.discover_services().await?;
 
         let controller = ControlPoint::new(device).await?;
         self.control_point = Some(controller);
 
         Ok(())
-    }
-}
-
-impl BleSensor<Configure> {
-    /// Add a data type to listen to
-    #[instrument(skip(self))]
-    pub fn listen(mut self, ty: EventType) -> Self {
-        if self.subscribed_data_event_types.contains(&ty) {
-            return self;
-        }
-        tracing::info!("'{ty:?}' added to subscribed_data_event_types field");
-        match ty {
-            EventType::Eeg => {
-                if !self.level.eeg_rate {
-                    self.level.eeg_rate = true;
-                }
-            }
-            EventType::Battery => {
-                if !self.level.battery {
-                    self.level.battery = true;
-                }
-            }
-        }
-
-        self.subscribed_data_event_types.push(ty);
-        self
-    }
-
-    /// Produce the sensor ready for build
-    #[instrument(skip(self))]
-    pub async fn build(self) -> BBitResult<BleSensor<EventLoop>> {
-        if self.level.eeg_rate {
-            self.subscribe(EventType::Eeg.into()).await?;
-        }
-        if self.level.battery {
-            self.subscribe(EventType::Battery.into()).await?;
-        }
-
-        Ok(BleSensor {
-            level: EventLoop,
-            ble_manager: self.ble_manager,
-            ble_device: self.ble_device,
-            control_point: self.control_point,
-            subscribed_data_event_types: self.subscribed_data_event_types,
-        })
     }
 }
 
@@ -241,7 +196,83 @@ impl BleSensor<EventLoop> {
         handler: H,
     ) -> BleHandle {
         tracing::info!("starting measurements");
-        todo!()
+
+        // look for subscribed events
+        for event_type in &self.subscribed_data_event_types {
+            // use EventType::*;
+            // TODO: send eeg config data
+        }
+        let bt_sensor = Arc::new(self);
+        let event_sensor = Arc::clone(&bt_sensor);
+        tracing::info!("starting bluetooth task");
+        let (bt_tx, mut bt_rx) = mpsc::channel(128);
+        let (pause_tx, pause_rx) = watch::channel(false);
+
+        tokio::task::spawn(async move {
+            let device = bt_sensor.ble_device.as_ref().unwrap();
+            let mut notification_stream = device.notifications().await?;
+
+            while let Some(data) = notification_stream.next().await {
+                tracing::debug!("received bluetooth data: {data:?}");
+                if *pause_rx.borrow() {
+                    tracing::debug!("paused: ignoring data");
+                    continue;
+                }
+                if data.uuid == NotifyUuid::BatteryLevel.into() {
+                    let battery = data.value[0];
+                    let Ok(_) = bt_tx.send(BluetoothEvent::Battery(battery)).await else { break };
+                } else if data.uuid == NotifyUuid::EegMeasurement.into() {
+                    let eeg = data.value;
+                    let Ok(_) = bt_tx.send(BluetoothEvent::Egg(eeg)).await else { break };
+                } else if data.uuid == NotifyUuid::ResistanceMeasurement.into() {
+                    let resist = data.value;
+                    let Ok(_) = bt_tx.send(BluetoothEvent::Resistance(resist)).await else { break };
+                }
+            }
+
+            Ok::<_, Error>(())
+        });
+
+        tracing::info!("starting event task");
+        let (event_tx, mut event_rx) = mpsc::channel(4);
+        tokio::task::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(data) = bt_rx.recv() => {
+                        tracing::debug!("received bt channel message");
+                        use BluetoothEvent::*;
+                        match data {
+                            Battery(bat) => handler.battery_update(bat).await,
+                            Egg(eeg) => handler.eeg_update(eeg).await,
+                            Resistance(resist) => handler.resistance_update(resist).await,
+                        }
+                    }
+                    Some(event) = event_rx.recv() => {
+                        tracing::debug!("received event: {event:?}");
+                        match event {
+                            BleDeviceEvent::Stop => {
+                                break;
+                            }
+                            BleDeviceEvent::Start => {
+                            // BleDeviceEvent::Add { ty, ret } => {
+                            //     let res = event_sensor.get_pmd_response(ControlPointCommand::RequestMeasurementStart, ty).await;
+                            //     let _ = ret.send(res);
+                            }
+                            BleDeviceEvent::Resistance => {
+                            // BleDeviceEvent::Remove { ty, ret } => {
+                            //     let res = event_sensor.get_pmd_response(ControlPointCommand::StopMeasurement, ty).await;
+                            //     let _ = ret.send(res);
+                            }
+                        }
+                    }
+                    else => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        BleHandle::new(event_tx, pause_tx)
     }
 }
 
@@ -307,12 +338,12 @@ impl<L: Level + Connected> BleSensor<L> {
 /// Handle to the [`BleSensor`] that is running an event loop
 #[derive(Clone)]
 pub struct BleHandle {
-    sender: mpsc::Sender<Event>,
+    sender: mpsc::Sender<BleDeviceEvent>,
     pause: Arc<watch::Sender<bool>>,
 }
 
 impl BleHandle {
-    fn new(sender: mpsc::Sender<Event>, pause: watch::Sender<bool>) -> Self {
+    fn new(sender: mpsc::Sender<BleDeviceEvent>, pause: watch::Sender<bool>) -> Self {
         Self {
             sender,
             pause: Arc::new(pause),
@@ -320,32 +351,22 @@ impl BleHandle {
     }
 }
 
-/// Type of events to send to the event loop of [`BleSensor`]
+/// Type of events sent to the event loop from [`BleSensor`]
 #[derive(Debug)]
-enum Event {
+enum BleDeviceEvent {
+    /// Send config command to BleSensor and start the event loop
+    Start,
     /// Stop the event loop
     Stop,
+    ///
+    /// Start resistance measurement
+    Resistance,
 }
 
-#[derive(Clone, Debug)]
-pub enum CommandType {
-    CommandStartSignal,
-    CommandStopSignal,
-    CommandStartResist,
-    CommandStopResist,
-    CommandStartMEMS,
-    CommandStopMEMS,
-    CommandStartRespiration,
-    CommandStopRespiration,
-    CommandStartStimulation,
-    CommandStopStimulation,
-    CommandEnableMotionAssistant,
-    CommandDisableMotionAssistant,
-    CommandFindMe,
-}
-
-#[derive(Clone, Debug)]
-pub struct CommandArray<'a> {
-    cmd_array: &'a [CommandData],
-    cmd_array_size: usize,
+/// Bluetooth data received from the sensor
+#[derive(Debug)]
+enum BluetoothEvent {
+    Battery(u8),
+    Egg(Vec<u8>),
+    Resistance(Vec<u8>),
 }

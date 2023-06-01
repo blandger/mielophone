@@ -1,6 +1,6 @@
 pub mod bbit;
 
-use crate::bbit::device::{BBitResult, CommandData, EegData};
+use crate::bbit::device::{BBitResult, CommandData};
 pub use async_trait::async_trait;
 use btleplug::api::{Characteristic, Peripheral as _};
 use btleplug::platform::Peripheral;
@@ -44,11 +44,16 @@ pub trait EventHandler {
     /// Dispatched when an eeg data is received.
     ///
     /// Contains information about the O1, O2, T3, T4 + interval.
-    async fn eeg_update(&self, _eeg_data: EegData) {}
+    async fn eeg_update(&self, _eeg_data: Vec<u8>) {}
+
+    /// Dispatched when an resistance data is received.
+    ///
+    /// Contains information about the O1, O2, T3, T4 resistance against Reference.
+    async fn resistance_update(&self, _eeg_data: Vec<u8>) {}
 
     /// Dispatched when measurement data is received over the PMD data UUID.
     ///
-    /// Contains data in a [`PmdRead`].
+    /// Contains data in a [`CommandData`].
     async fn send_command(&self, _data: CommandData) {}
 
     /// Checked at start of each event loop.

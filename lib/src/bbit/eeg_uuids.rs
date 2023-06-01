@@ -37,6 +37,7 @@ pub const WRITE_COMMAN_UUID: Uuid = uuid!("6E400003-B534-F393-68A9-E50E24DCCA9E"
 pub enum NotifyUuid {
     BatteryLevel,
     EegMeasurement,
+    ResistanceMeasurement,
 }
 
 /// A list of stream types that can be subscribed to.
@@ -46,6 +47,8 @@ pub enum NotifyStream {
     Battery,
     /// Receive eeg data updates.
     EegMeasurement,
+    /// Receive eeg data updates.
+    ResistanceMeasurement,
 }
 
 impl From<NotifyStream> for Uuid {
@@ -59,6 +62,7 @@ impl From<NotifyStream> for NotifyUuid {
         match item {
             NotifyStream::Battery => Self::BatteryLevel,
             NotifyStream::EegMeasurement => Self::EegMeasurement,
+            NotifyStream::ResistanceMeasurement => Self::ResistanceMeasurement,
         }
     }
 }
@@ -70,6 +74,8 @@ pub enum EventType {
     Eeg,
     /// Battery
     Battery,
+    // electrode resistance
+    Resistance,
 }
 
 impl EventType {
@@ -84,6 +90,7 @@ impl From<EventType> for NotifyStream {
         match value {
             EventType::Battery => Self::Battery,
             EventType::Eeg => Self::EegMeasurement,
+            EventType::Resistance => Self::ResistanceMeasurement,
         }
     }
 }
@@ -93,6 +100,7 @@ impl From<EventType> for NotifyUuid {
         match value {
             EventType::Battery => Self::BatteryLevel,
             EventType::Eeg => Self::EegMeasurement,
+            EventType::Resistance => Self::ResistanceMeasurement,
         }
     }
 }
@@ -102,6 +110,7 @@ impl From<NotifyUuid> for Uuid {
         match item {
             NotifyUuid::BatteryLevel => BATTERY_LEVEL_CHARACTERISTIC_UUID,
             NotifyUuid::EegMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
+            NotifyUuid::ResistanceMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
         }
     }
 }
