@@ -23,7 +23,7 @@ pub enum Error {
     #[error("Characteristic not found")]
     CharacteristicNotFound,
     /// EEG Data packets received from device is not parsed
-    #[error("Invalid data '{0}'")]
+    #[error("Invalid '{0}'")]
     InvalidData(String),
     /// The command did not return a response
     #[error("No command response")]

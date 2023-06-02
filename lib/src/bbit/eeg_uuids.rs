@@ -4,30 +4,35 @@ use uuid::{uuid, Uuid};
 pub const PERIPHERAL_NAME_MATCH_FILTER: &'static str = "BrainBit";
 
 /// GAT access service for access to several characteristics below
-pub const GENERIC_ACCESS_SERVICE_UUID: Uuid = uuid!("00001800-0000-1000-8000-00805F9B34FB");
+// const GENERIC_ACCESS_SERVICE_UUID: Uuid = uuid!("00001800-0000-1000-8000-00805F9B34FB");
 
 /// Device name for reading (in GENERIC_ACCESS_SERVICE_UUID)
-const DEVICE_NAME_STRING_UUID: Uuid = uuid!("00002A00-0000-1000-8000-00805F9B34FB");
+// const DEVICE_NAME_STRING_UUID: Uuid = uuid!("00002A00-0000-1000-8000-00805F9B34FB");
 /// Device Appearance value reading (in GENERIC_ACCESS_SERVICE_UUID)
-const DEVICE_APPEARANCE_STRING_UUID: Uuid = uuid!("00002A01-0000-1000-8000-00805F9B34FB");
+// const DEVICE_APPEARANCE_STRING_UUID: Uuid = uuid!("00002A01-0000-1000-8000-00805F9B34FB");
 
 /// GAT attribute service for several device's characteristics
-pub const GENERIC_ATTRIBUTE_SERVICE_UUID: Uuid = uuid!("00001801-0000-1000-8000-00805F9B34FB");
+pub const GENERIC_ATTRIBUTE_SERVICE_UUID: Uuid = uuid!("0000180A-0000-1000-8000-00805F9B34FB");
 
 /// Device Model number, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
-const MODEL_NUMBER_STRING_UUID: Uuid = uuid!("00002A24-0000-1000-8000-00805F9B34FB");
+pub(crate) const MODEL_NUMBER_STRING_UUID: Uuid = uuid!("00002A24-0000-1000-8000-00805F9B34FB");
 /// Serial number, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
-const SERIAL_NUMBER_STRING_UUID: Uuid = uuid!("00002A25-0000-1000-8000-00805F9B34FB");
+pub(crate) const SERIAL_NUMBER_STRING_UUID: Uuid = uuid!("00002A25-0000-1000-8000-00805F9B34FB");
 /// HW revision number, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
-const HARDWARE_REVISION_STRING_UUID: Uuid = uuid!("00002A26-0000-1000-8000-00805F9B34FB");
+pub(crate) const HARDWARE_REVISION_STRING_UUID: Uuid =
+    uuid!("00002A26-0000-1000-8000-00805F9B34FB");
 /// SW revision number, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
-const FIRMWARE_REVISION_STRING_UUID: Uuid = uuid!("00002A27-0000-1000-8000-00805F9B34FB");
+pub(crate) const FIRMWARE_REVISION_STRING_UUID: Uuid =
+    uuid!("00002A27-0000-1000-8000-00805F9B34FB");
 /// Battery level, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
 pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid = uuid!("00002A05-0000-1000-8000-00805F9B34FB");
 
 /// Main GAT service to receive data and transmit commands from/to device
 pub const NSS2_SERVICE_UUID: Uuid = uuid!("6E400001-B534-F393-68A9-E50E24DCCA9E");
 
+/// Device state for receiving (in NSS2_SERVICE_UUID)
+pub const DEVICE_STATE_NOTIFY_CHARACTERISTIC_UUID: Uuid =
+    uuid!("6E400002-B534-F393-68A9-E50E24DCCA9E");
 /// EEG data for receiving (in NSS2_SERVICE_UUID)
 pub const EEG_DATA_NOTIFY_CHARACTERISTIC_UUID: Uuid = uuid!("6E400004-B534-F393-68A9-E50E24DCCA9E");
 /// Commands data for transmitting (in NSS2_SERVICE_UUID)
@@ -116,8 +121,6 @@ impl From<NotifyUuid> for Uuid {
 }
 
 pub enum StringUuid {
-    DeviceName,
-    DeviceAppearance,
     ModelNumber,
     HardwareRevision,
     FirmwareRevision,
@@ -127,8 +130,6 @@ pub enum StringUuid {
 impl From<StringUuid> for Uuid {
     fn from(item: StringUuid) -> Self {
         match item {
-            StringUuid::DeviceName => DEVICE_NAME_STRING_UUID,
-            StringUuid::DeviceAppearance => DEVICE_APPEARANCE_STRING_UUID,
             StringUuid::ModelNumber => MODEL_NUMBER_STRING_UUID,
             StringUuid::HardwareRevision => HARDWARE_REVISION_STRING_UUID,
             StringUuid::FirmwareRevision => FIRMWARE_REVISION_STRING_UUID,

@@ -23,11 +23,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let characteristics = connected.characteristics();
 
+    // list all characteristics
     for char in characteristics {
         tracing::info!("characteristic: {char:?}");
     }
+    // get device information
+    let device_info = connected.device_info().await.unwrap();
+    tracing::info!("{:?}", device_info);
 
-    tracing::info!("finished printing characteristics");
+    tracing::info!("finished");
 
     Ok(())
 }

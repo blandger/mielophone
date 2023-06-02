@@ -3,10 +3,7 @@ name = "mainapp"
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
 edition = "2021"
-description = "Simple console client app"
-
-[registries.crates-io]
-protocol = "sparse"
+description = "Console client app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

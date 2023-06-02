@@ -1,17 +1,24 @@
 use crate::bbit::control::{ControlPoint, ControlPointCommand};
-use crate::bbit::eeg_uuids::{EventType, NotifyStream, NotifyUuid, PERIPHERAL_NAME_MATCH_FILTER};
+use crate::bbit::eeg_uuids::{
+    EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
+    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, PERIPHERAL_NAME_MATCH_FILTER,
+    SERIAL_NUMBER_STRING_UUID, WRITE_COMMAN_UUID,
+};
+use crate::bbit::responses::DeviceInfo;
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
-use crate::{Error, EventHandler};
+use crate::{find_characteristic, Error, EventHandler};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
 };
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
+use futures::AsyncReadExt;
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{instrument, Event};
+use uuid::Uuid;
 
 pub type BBitResult<T> = Result<T, Error>;
 
@@ -29,10 +36,12 @@ pub struct BleSensor<L: Level> {
     /// Connected and controlled device
     ble_device: Option<Peripheral>,
     /// BLE event types subscribed and processed
-    subscribed_data_event_types: Vec<EventType>,
+    pub subscribed_data_event_types: Vec<EventType>,
     /// Device manage and send commands
-    control_point: Option<ControlPoint>,
+    pub control_point: Option<ControlPoint>,
     level: L,
+    /// Common device information like model, serial numbers, HW, SW revisions
+    pub device_info: OnceLock<DeviceInfo>,
 }
 
 impl BleSensor<Bluetooth> {
@@ -44,6 +53,7 @@ impl BleSensor<Bluetooth> {
             subscribed_data_event_types: vec![],
             control_point: None,
             level: Bluetooth,
+            device_info: OnceLock::new(),
         })
     }
 
@@ -68,6 +78,7 @@ impl BleSensor<Bluetooth> {
             control_point: self.control_point,
             subscribed_data_event_types: self.subscribed_data_event_types,
             level: Configure::default(),
+            device_info: self.device_info,
         };
 
         Ok(new_self)
@@ -120,6 +131,7 @@ impl BleSensor<Bluetooth> {
             control_point: self.control_point,
             subscribed_data_event_types: self.subscribed_data_event_types,
             level: Configure::default(),
+            device_info: self.device_info,
         };
 
         Ok(new_self)
@@ -332,6 +344,45 @@ impl<L: Level + Connected> BleSensor<L> {
         tracing::debug!("read {} bytes: {bytes:x?}", bytes.len());
 
         Ok(u8::from_le_bytes([byte]))
+    }
+
+    /// Read the internal device info - model, serial, SW, HW revision
+    #[instrument(skip_all)]
+    pub async fn device_info(&self) -> BBitResult<DeviceInfo> {
+        tracing::info!("fetching device info...");
+        // on time initialization
+        if self.device_info.get().is_none() {
+            let model_number = self.read_string(MODEL_NUMBER_STRING_UUID).await?;
+            let serial_number = self.read_string(SERIAL_NUMBER_STRING_UUID).await?;
+            let hardware_revision = self.read_string(HARDWARE_REVISION_STRING_UUID).await?;
+            let firmware_revision = self.read_string(FIRMWARE_REVISION_STRING_UUID).await?;
+            let device_info = DeviceInfo::new(
+                model_number,
+                serial_number,
+                hardware_revision,
+                firmware_revision,
+            );
+            let _ = self.device_info.set(device_info);
+        }
+        tracing::debug!("device info: '{:?}'", self.device_info.get());
+        Ok(self.device_info.get().unwrap().clone())
+    }
+
+    ///
+    async fn read_string(&self, uuid: Uuid) -> BBitResult<String> {
+        let data = self.read(uuid).await?;
+
+        let string = String::from_utf8_lossy(&data).into_owned();
+        Ok(string.trim_matches(char::from(0)).to_string())
+    }
+
+    async fn read(&self, uuid: Uuid) -> BBitResult<Vec<u8>> {
+        let device = self.ble_device.as_ref().unwrap();
+        // let device = self.device().await?;
+        if let Ok(char) = find_characteristic(device, uuid).await {
+            return device.read(&char).await.map_err(Error::BleError);
+        }
+        Err(Error::CharacteristicNotFound)
     }
 }
 

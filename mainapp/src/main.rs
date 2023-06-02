@@ -24,13 +24,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Following error is possible on Linux !
     // thread 'main' panicked at 'Can't get Battery Level due to error...: BleError(Other(DbusError(
     // D-Bus error: Read not permitted (org.bluez.Error.NotPermitted))))', mainapp/src/main.rs
-    tracing::info!(
+    /*    tracing::info!(
         "battery level is: {}%",
         connected
             .battery()
             .await
             .expect("Can't get Battery Level due to error...")
-    );
+    );*/
+
+    let device_info = connected.device_info().await.unwrap();
+    tracing::info!("{:?}", device_info);
 
     Ok(())
 }

@@ -5,9 +5,6 @@ authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
 edition = "2021"
 description = "Library wrapper above BLE to support limited device list"
 
-[registries.crates-io]
-protocol = "sparse"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 async-trait = "0.1"
