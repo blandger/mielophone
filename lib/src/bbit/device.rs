@@ -7,6 +7,7 @@ use crate::bbit::eeg_uuids::{
 use crate::bbit::responses::DeviceInfo;
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::{find_characteristic, Error, EventHandler};
+use btleplug::api::WriteType;
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
@@ -347,7 +348,7 @@ impl<L: Level + Connected> BleSensor<L> {
     }
 
     /// Read the internal device info - model, serial, SW, HW revision
-    #[instrument(skip_all)]
+    #[instrument(skip(self))]
     pub async fn device_info(&self) -> BBitResult<DeviceInfo> {
         tracing::info!("fetching device info...");
         // on time initialization
@@ -368,7 +369,7 @@ impl<L: Level + Connected> BleSensor<L> {
         Ok(self.device_info.get().unwrap().clone())
     }
 
-    ///
+    /// low level reading bytes as String
     async fn read_string(&self, uuid: Uuid) -> BBitResult<String> {
         let data = self.read(uuid).await?;
 
@@ -383,6 +384,45 @@ impl<L: Level + Connected> BleSensor<L> {
             return device.read(&char).await.map_err(Error::BleError);
         }
         Err(Error::CharacteristicNotFound)
+    }
+
+    /// Send command as enum to [`ControlPoint`].
+    #[instrument(skip(self))]
+    pub async fn send_command(&self, command: ControlPointCommand) -> BBitResult<()> {
+        let control_point = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+
+        control_point
+            .send_control_command_enum(device, &command)
+            .await?;
+        Ok(())
+    }
+
+    async fn stop_measurement(&self) -> BBitResult<()> {
+        let controller = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        controller
+            .send_control_command_enum(&device, &ControlPointCommand::CommandStop)
+            .await?;
+        Ok(())
+    }
+
+    async fn start_resist_measurement(&self) -> BBitResult<()> {
+        let controller = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        controller
+            .send_control_command_enum(&device, &ControlPointCommand::CommandStartResist)
+            .await?;
+        Ok(())
+    }
+
+    async fn start_signal_measurement(&self) -> BBitResult<()> {
+        let controller = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        controller
+            .send_control_command_enum(&device, &ControlPointCommand::CommandStartSignal)
+            .await?;
+        Ok(())
     }
 }
 
