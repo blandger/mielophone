@@ -100,16 +100,16 @@ pub enum Nss2Status {
     DfuBootLoderMode,
 }
 impl TryFrom<u8> for Nss2Status {
-    type Error = ();
+    type Error = &'static str;
 
-    fn try_from(value: u8) -> Result<Self, ()> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0x0 => Ok(Self::Initial),
             0x1 => Ok(Self::Stopped),
             0x2 => Ok(Self::EegTransmission),
             0x3 => Ok(Self::ResistTransmission),
             0x4 => Ok(Self::DfuBootLoderMode),
-            _ => Err(()),
+            _ => Err("Nss2Status value is incorrect"),
         }
     }
 }
@@ -125,14 +125,14 @@ pub enum CommandResultError {
     ErrorSwitchMode,
 }
 impl TryFrom<u8> for CommandResultError {
-    type Error = ();
+    type Error = &'static str;
 
-    fn try_from(value: u8) -> Result<Self, ()> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0x0 => Ok(Self::NoError),
             0x1 => Ok(Self::ErrorLength),
             0x2 => Ok(Self::ErrorSwitchMode),
-            _ => Err(()),
+            _ => Err("BBit command execution result error"),
         }
     }
 }

@@ -48,28 +48,96 @@ impl ControlPoint {
     }
 }
 
+/// Command enum stores internal u8 array with config data.
 #[repr(u8)]
 #[derive(Clone, Debug)]
 pub enum ControlPointCommand {
-    CommandInvalid = 0x00,
-    CommandStop = 0x01,
-    CommandStartSignal = 2,
-    // CommandStartSignal([u8; 5]),
-    CommandStartResist = 3,
-    // CommandStartResist([u8; 8]),
-    CommandStartBootloader = 0x04,
+    /// Impossible command
+    Invalid = 0x00,
+    /// Stop resistance or signal measurement
+    StopAll = 0x01,
+    /// Start signal measurement
+    StartEegSignal([u8; 5]),
+    /// Start resistance measurement
+    StartResist([u8; 8]),
+    /// Switch to dfu mode
+    StartDfu = 0x04,
 }
-impl From<u8> for ControlPointCommand {
-    fn from(value: u8) -> ControlPointCommand {
+
+impl TryFrom<Vec<u8>> for ControlPointCommand {
+    type Error = &'static str;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        if value.is_empty() || value.len() > 8 {
+            let vec_len = value.len().to_string();
+            return Err("Source Vec<u8> length is incorrect");
+        }
+        match value[..] {
+            [0] => Ok(ControlPointCommand::Invalid),
+            [1] => Ok(ControlPointCommand::StopAll),
+            [2, signal_config_ch1, signal_config_ch2, signal_config_ch3, signal_config_ch4] => {
+                let data_array = [
+                    2,
+                    signal_config_ch1,
+                    signal_config_ch2,
+                    signal_config_ch3,
+                    signal_config_ch4,
+                ];
+                Ok(ControlPointCommand::StartEegSignal(data_array))
+            }
+            [4, resist_config_ch1, resist_config_ch2, resist_config_ch3, resist_config_ch4, resist_sensp, resist_sensn, resist_flipp] =>
+            {
+                let data_array = [
+                    3,
+                    resist_config_ch1,
+                    resist_config_ch2,
+                    resist_config_ch3,
+                    resist_config_ch4,
+                    resist_sensp,
+                    resist_sensn,
+                    resist_flipp,
+                ];
+                Ok(ControlPointCommand::StartResist(data_array))
+            }
+            [5] => Ok(ControlPointCommand::StartDfu),
+            _ => Err("ControlPointCommand is unknown inside Vec<u8>"),
+        }
+    }
+}
+
+impl TryFrom<&[u8]> for ControlPointCommand {
+    type Error = &'static str;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         match value {
-            0 => ControlPointCommand::CommandInvalid,
-            1 => ControlPointCommand::CommandStop,
-            // 2 => ControlPointCommand::CommandStartSignal([u8; 5]),
-            2 => ControlPointCommand::CommandStartSignal,
-            // 4 => ControlPointCommand::CommandStartResist([u8; 8]),
-            4 => ControlPointCommand::CommandStartResist,
-            5 => ControlPointCommand::CommandStartBootloader,
-            _ => panic!("ControlPointCommand is unknown for value = {}", value),
+            [0] => Ok(ControlPointCommand::Invalid),
+            [1] => Ok(ControlPointCommand::StopAll),
+            [2, signal_config_ch1, signal_config_ch2, signal_config_ch3, signal_config_ch4] => {
+                let data_array = [
+                    2,
+                    *signal_config_ch1,
+                    *signal_config_ch2,
+                    *signal_config_ch3,
+                    *signal_config_ch4,
+                ];
+                Ok(ControlPointCommand::StartEegSignal(data_array))
+            }
+            [4, resist_config_ch1, resist_config_ch2, resist_config_ch3, resist_config_ch4, resist_sensp, resist_sensn, resist_flipp] =>
+            {
+                let data_array = [
+                    3,
+                    *resist_config_ch1,
+                    *resist_config_ch2,
+                    *resist_config_ch3,
+                    *resist_config_ch4,
+                    *resist_sensp,
+                    *resist_sensn,
+                    *resist_flipp,
+                ];
+                Ok(ControlPointCommand::StartResist(data_array))
+            }
+            [5] => Ok(ControlPointCommand::StartDfu),
+            _ => Err("ControlPointCommand is unknown inside array[u8]"),
         }
     }
 }

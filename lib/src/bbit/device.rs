@@ -266,12 +266,12 @@ impl BleSensor<EventLoop> {
                             BleDeviceEvent::Stop => {
                                 break;
                             }
-                            BleDeviceEvent::Start => {
+                            BleDeviceEvent::StartSignal => {
                             // BleDeviceEvent::Add { ty, ret } => {
                             //     let res = event_sensor.get_pmd_response(ControlPointCommand::RequestMeasurementStart, ty).await;
                             //     let _ = ret.send(res);
                             }
-                            BleDeviceEvent::Resistance => {
+                            BleDeviceEvent::StartResistance => {
                             // BleDeviceEvent::Remove { ty, ret } => {
                             //     let res = event_sensor.get_pmd_response(ControlPointCommand::StopMeasurement, ty).await;
                             //     let _ = ret.send(res);
@@ -402,7 +402,7 @@ impl<L: Level + Connected> BleSensor<L> {
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         controller
-            .send_control_command_enum(&device, &ControlPointCommand::CommandStop)
+            .send_control_command_enum(&device, &ControlPointCommand::StopAll)
             .await?;
         Ok(())
     }
@@ -410,8 +410,10 @@ impl<L: Level + Connected> BleSensor<L> {
     async fn start_resist_measurement(&self) -> BBitResult<()> {
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
+        let start_resist_measurement_command: ControlPointCommand =
+            ControlPointCommand::StartResist([4, 0, 0, 0, 0, 0, 0, 0]);
         controller
-            .send_control_command_enum(&device, &ControlPointCommand::CommandStartResist)
+            .send_control_command_enum(&device, &start_resist_measurement_command)
             .await?;
         Ok(())
     }
@@ -419,8 +421,10 @@ impl<L: Level + Connected> BleSensor<L> {
     async fn start_signal_measurement(&self) -> BBitResult<()> {
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
+        let start_signal_measurement_command: ControlPointCommand =
+            ControlPointCommand::StartEegSignal([2, 0, 0, 0, 0]);
         controller
-            .send_control_command_enum(&device, &ControlPointCommand::CommandStartSignal)
+            .send_control_command_enum(&device, &start_signal_measurement_command)
             .await?;
         Ok(())
     }
@@ -440,18 +444,25 @@ impl BleHandle {
             pause: Arc::new(pause),
         }
     }
+
+    /// Stop Signal or Resistance measurement
+    #[instrument(skip(self))]
+    pub async fn stop(self) {
+        tracing::info!("stopping bbit sensor");
+        let _ = self.sender.send(BleDeviceEvent::Stop).await;
+    }
 }
 
 /// Type of events sent to the event loop from [`BleSensor`]
 #[derive(Debug)]
 enum BleDeviceEvent {
-    /// Send config command to BleSensor and start the event loop
-    Start,
-    /// Stop the event loop
+    /// Stop the Signal or Resistance measurement
     Stop,
+    /// Send config command to BleSensor and start the event loop
+    StartSignal,
     ///
     /// Start resistance measurement
-    Resistance,
+    StartResistance,
 }
 
 /// Bluetooth data received from the sensor
