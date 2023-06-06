@@ -17,6 +17,14 @@
 | Neurotech Signal Service2            | 6E400003-B534-F393-68A9-E50E24DCCA9E | WRITE         | Commands / manage device (tx) |
 |                                      | 6E400004-B534-F393-68A9-E50E24DCCA9E | NOTIFY        |       Receive data (rx)       |
 
+### Device Information Service, example BLE device info
+DeviceInfo { 
+    model_number: "65", // BrainBit code
+    serial_number: "130101",
+    hardware_revision: "6",
+    firmware_revision: "1"
+}
+
 
 ## Colibri R
 Found BLE peripheral : 'Some("Neurotech_Colibri_R")' : address = [82, 173, 134, 228, 112, 224] is connected: false
