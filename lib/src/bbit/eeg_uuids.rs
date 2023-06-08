@@ -24,8 +24,6 @@ pub(crate) const HARDWARE_REVISION_STRING_UUID: Uuid =
 /// SW revision number, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
 pub(crate) const FIRMWARE_REVISION_STRING_UUID: Uuid =
     uuid!("00002A27-0000-1000-8000-00805F9B34FB");
-/// Battery level, 2 bytes (in GENERIC_ATTRIBUTE_SERVICE_UUID)
-pub const BATTERY_LEVEL_CHARACTERISTIC_UUID: Uuid = uuid!("00002A05-0000-1000-8000-00805F9B34FB");
 
 /// Main GAT service to receive data and transmit commands from/to device
 pub const NSS2_SERVICE_UUID: Uuid = uuid!("6E400001-B534-F393-68A9-E50E24DCCA9E");
@@ -40,16 +38,19 @@ pub const WRITE_COMMAN_UUID: Uuid = uuid!("6E400003-B534-F393-68A9-E50E24DCCA9E"
 
 /// Which UUID to send BLE messages to.
 pub enum NotifyUuid {
-    BatteryLevel,
+    /// Notify about device status change, including command errors, battery level change
+    DeviceStateChange,
+    /// Notify about EEG signal measurement/updates
     EegMeasurement,
+    /// Notify about resistance signal measurement/updates
     ResistanceMeasurement,
 }
 
 /// A list of stream types that can be subscribed to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifyStream {
-    /// Receive battery updates.
-    Battery,
+    /// Device status updates, includes command errors, battery level
+    DeviceState,
     /// Receive eeg data updates.
     EegMeasurement,
     /// Receive eeg data updates.
@@ -65,7 +66,7 @@ impl From<NotifyStream> for Uuid {
 impl From<NotifyStream> for NotifyUuid {
     fn from(item: NotifyStream) -> Self {
         match item {
-            NotifyStream::Battery => Self::BatteryLevel,
+            NotifyStream::DeviceState => Self::DeviceStateChange,
             NotifyStream::EegMeasurement => Self::EegMeasurement,
             NotifyStream::ResistanceMeasurement => Self::ResistanceMeasurement,
         }
@@ -77,8 +78,8 @@ impl From<NotifyStream> for NotifyUuid {
 pub enum EventType {
     /// EEG data
     Eeg,
-    /// Battery
-    Battery,
+    /// Internal device status with additional data
+    State,
     // electrode resistance
     Resistance,
 }
@@ -93,7 +94,7 @@ impl EventType {
 impl From<EventType> for NotifyStream {
     fn from(value: EventType) -> Self {
         match value {
-            EventType::Battery => Self::Battery,
+            EventType::State => Self::DeviceState,
             EventType::Eeg => Self::EegMeasurement,
             EventType::Resistance => Self::ResistanceMeasurement,
         }
@@ -103,7 +104,7 @@ impl From<EventType> for NotifyStream {
 impl From<EventType> for NotifyUuid {
     fn from(value: EventType) -> Self {
         match value {
-            EventType::Battery => Self::BatteryLevel,
+            EventType::State => Self::DeviceStateChange,
             EventType::Eeg => Self::EegMeasurement,
             EventType::Resistance => Self::ResistanceMeasurement,
         }
@@ -113,7 +114,7 @@ impl From<EventType> for NotifyUuid {
 impl From<NotifyUuid> for Uuid {
     fn from(item: NotifyUuid) -> Self {
         match item {
-            NotifyUuid::BatteryLevel => BATTERY_LEVEL_CHARACTERISTIC_UUID,
+            NotifyUuid::DeviceStateChange => DEVICE_STATE_NOTIFY_CHARACTERISTIC_UUID,
             NotifyUuid::EegMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
             NotifyUuid::ResistanceMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
         }

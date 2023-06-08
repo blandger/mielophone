@@ -21,9 +21,9 @@ impl internal::Level for Bluetooth {}
 /// [`BleSensor`] level for registering data types to listen for
 #[derive(Default)]
 pub struct Configure {
-    /// Is subscribed to battery stream
-    pub battery: bool,
-    /// Is subscribed to EEG stream
+    /// Is subscribed to device status changes, cmd errors, battery
+    pub device_status: bool,
+    /// Is subscribed to EEG or Resistance stream
     pub eeg_rate: bool,
 }
 

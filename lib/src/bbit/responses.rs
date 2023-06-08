@@ -1,6 +1,3 @@
-use crate::bbit::device::BBitResult;
-use crate::Error;
-
 /// A common device's state type
 // ??? Probably it's returned from UUID = 6E400002-B534-F393-68A9-E50E24DCCA9E (READ / NOTIFY)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,10 +15,10 @@ pub enum CommonDeviceState {
 }
 
 /// Structure to contain HR data and RR interval.
-#[derive(Debug, Clone)]
-pub struct EggData {
-    data: Vec<u16>,
-}
+// #[derive(Debug, Clone)]
+// pub struct EggData {
+//     data: Vec<u16>,
+// }
 
 /// Contains common information about device like:
 /// model, serial number, HW, SW revision
@@ -49,30 +46,32 @@ impl DeviceInfo {
     }
 }
 
-/// Common Device status including NSS2 service state, Commands execution state, battery level, Firmware version
+/// Common Device status data including NSS2 service state, Commands execution state, battery level, Firmware version
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DeviceStatus {
+pub struct DeviceStatusData {
     /// NNS service state
-    status_nss2: Nss2Status,
+    pub status_nss2: Nss2Status,
     // Error code. It's reset when new command is received
-    cmd_error: CommandResultError,
+    pub cmd_error: CommandResultError,
     /// Battery level in percents (%) is stored by lower seven bits, 8-th bit keeps 'charging flag'
-    battery_level: u8,
+    pub battery_level: u8,
     /// Firmware version
-    firmware_version: u8,
+    pub firmware_version: u8,
 }
 
-impl DeviceStatus {
-    /// Create new instance of [`DeviceStatus`] from Vec<u8>.
-    pub fn new(value: Vec<u8>) -> BBitResult<Self> {
+impl TryFrom<Vec<u8>> for DeviceStatusData {
+    type Error = &'static str;
+
+    /// Create new instance of [`DeviceStatusData`] from Vec<u8>.
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         if value.is_empty() || value.len() != 4 {
             eprintln!("Invalid DeviceStatus result vec length {:?}", value);
-            return Err(Error::InvalidData("device status Vec length".to_string()));
+            return Err("device status Vec length");
         }
-        let status_nss2 = Nss2Status::try_from(value[0])
-            .map_err(|_| Error::InvalidData("NSS2 status byte value".to_string()))?;
-        let cmd_error = CommandResultError::try_from(value[1])
-            .map_err(|_| Error::InvalidData("NSS2 CMD byte value".to_string()))?;
+        let status_nss2 = Nss2Status::try_from(value[0])?;
+        // .map_err(|_| Error::InvalidData("NSS2 status byte value".to_string()))?;
+        let cmd_error = CommandResultError::try_from(value[1])?;
+        // .map_err(|_| Error::InvalidData("NSS2 CMD byte value".to_string()))?;
         let battery_level = value[2];
         let firmware_version = value[3];
 

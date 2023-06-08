@@ -1,4 +1,4 @@
-use crate::bbit::device::{BBitResult, CommandData};
+use crate::bbit::device::{BBitResult};
 use crate::bbit::eeg_uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
@@ -69,7 +69,6 @@ impl TryFrom<Vec<u8>> for ControlPointCommand {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         if value.is_empty() || value.len() > 8 {
-            let vec_len = value.len().to_string();
             return Err("Source Vec<u8> length is incorrect");
         }
         match value[..] {
