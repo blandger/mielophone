@@ -1,4 +1,4 @@
-use lib::bbit::device::BBiteSensor;
+use lib::bbit::device::BBitSensor;
 use lib::bbit::eeg_uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 use lib::bbit::responses::DeviceStatusData;
 use lib::EventHandler;
@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
-    let connected = BBiteSensor::new()
+    let connected = BBitSensor::new()
         .await?
         .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
         .await?

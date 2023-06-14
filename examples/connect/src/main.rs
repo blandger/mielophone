@@ -1,4 +1,4 @@
-use lib::bbit::device::BBiteSensor;
+use lib::bbit::device::BBitSensor;
 use lib::bbit::eeg_uuids::PERIPHERAL_NAME_MATCH_FILTER;
 use std::error::Error;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
-    let connected = BBiteSensor::new()
+    let connected = BBitSensor::new()
         .await
         .unwrap()
         .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
