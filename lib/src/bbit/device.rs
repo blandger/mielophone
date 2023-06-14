@@ -30,7 +30,7 @@ pub struct CommandData {
 }
 
 /// The core sensor manager
-pub struct BleSensor<L: Level> {
+pub struct BBiteSensor<L: Level> {
     /// BLE connection manager
     ble_manager: Manager,
     /// Connected and controlled device
@@ -44,7 +44,7 @@ pub struct BleSensor<L: Level> {
     pub device_info: OnceLock<DeviceInfo>,
 }
 
-impl BleSensor<Bluetooth> {
+impl BBiteSensor<Bluetooth> {
     /// Construct a BleSensor
     pub async fn new() -> BBitResult<Self> {
         Ok(Self {
@@ -59,7 +59,7 @@ impl BleSensor<Bluetooth> {
 
     /// Connect to a device. Blocks until a connection is found
     #[instrument(skip(self))]
-    pub async fn block_connect(mut self, device_name: &str) -> BBitResult<BleSensor<Configure>> {
+    pub async fn block_connect(mut self, device_name: &str) -> BBitResult<BBiteSensor<Configure>> {
         let error_on_connect_attempts_count = 20; // error attempts
 
         while !self.is_connected().await {
@@ -83,7 +83,7 @@ impl BleSensor<Bluetooth> {
             }
         }
 
-        let new_self: BleSensor<Configure> = BleSensor {
+        let new_self: BBiteSensor<Configure> = BBiteSensor {
             ble_manager: self.ble_manager,
             ble_device: self.ble_device,
             control_point: self.control_point,
@@ -105,9 +105,9 @@ impl BleSensor<Bluetooth> {
     /// # #[tokio::main]
     /// # async fn main() {
     /// use lib::Error;
-    /// use lib::bbit::device::BleSensor;
+    /// use lib::bbit::device::BBiteSensor;
     ///
-    /// let mut bbit = BleSensor::new().await.unwrap()
+    /// let mut bbit = BBiteSensor::new().await.unwrap()
     ///     // default handling that is applied to BleSensor::block_connect
     ///     .map_connect("BrainBit", |r| {
     ///         match r {
@@ -127,7 +127,7 @@ impl BleSensor<Bluetooth> {
         mut self,
         device_id: &str,
         mut f: F,
-    ) -> BBitResult<BleSensor<Configure>>
+    ) -> BBitResult<BBiteSensor<Configure>>
     where
         F: FnMut(BBitResult<()>) -> BBitResult<()>,
     {
@@ -136,7 +136,7 @@ impl BleSensor<Bluetooth> {
                 return Err(e);
             }
         }
-        let new_self: BleSensor<Configure> = BleSensor {
+        let new_self: BBiteSensor<Configure> = BBiteSensor {
             ble_manager: self.ble_manager,
             ble_device: self.ble_device,
             control_point: self.control_point,
@@ -212,7 +212,7 @@ impl BleSensor<Bluetooth> {
 }
 
 /// Assign configurable parameters for BBit device
-impl BleSensor<Configure> {
+impl BBiteSensor<Configure> {
     /// Add a data type to listen to
     #[instrument(skip(self))]
     pub fn listen(mut self, event_type: EventType) -> Self {
@@ -239,17 +239,19 @@ impl BleSensor<Configure> {
 
     /// Produce the sensor ready for build
     #[instrument(skip(self))]
-    pub async fn build(self) -> BBitResult<BleSensor<EventLoop>> {
-        /*        if self.level.eeg_rate {
+    pub async fn build(self) -> BBitResult<BBiteSensor<EventLoop>> {
+        if self.level.eeg_rate {
+            tracing::debug!("Subs to Resist");
             self.subscribe(EventType::Resistance.into()).await?;
-        }*/
+        }
         if self.level.device_status {
+            tracing::debug!("Subs to Dev Status");
             self.subscribe(EventType::State.into()).await?;
         }
         tracing::info!("Make sure measurements from previous connections are stopped");
         self.stop_measurement().await?;
 
-        Ok(BleSensor {
+        Ok(BBiteSensor {
             ble_manager: self.ble_manager,
             ble_device: self.ble_device,
             control_point: self.control_point,
@@ -260,7 +262,7 @@ impl BleSensor<Configure> {
     }
 }
 
-impl BleSensor<EventLoop> {
+impl BBiteSensor<EventLoop> {
     /// Start the event loop
     #[instrument(skip_all)]
     pub async fn event_loop<H: EventHandler + Sync + Send + 'static>(
@@ -359,7 +361,7 @@ impl BleSensor<EventLoop> {
     }
 }
 
-impl<L: Level + Connected> BleSensor<L> {
+impl<L: Level + Connected> BBiteSensor<L> {
     #[instrument(skip(self))]
     async fn subscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
         tracing::info!("subscribing to '{:?}'", notify_stream);
@@ -498,7 +500,7 @@ impl<L: Level + Connected> BleSensor<L> {
     }
 }
 
-/// Handle to the [`BleSensor`] that is running an event loop
+/// Handle to the [`BBiteSensor`] that is running an event loop
 #[derive(Clone)]
 pub struct BleHandle {
     sender: mpsc::Sender<BleDeviceEvent>,
@@ -537,7 +539,7 @@ impl BleHandle {
     }
 }
 
-/// Type of events sent to the event loop from [`BleSensor`]
+/// Type of events sent to the event loop from [`BBiteSensor`]
 #[derive(Debug)]
 enum BleDeviceEvent {
     /// Stop the Signal or Resistance measurement

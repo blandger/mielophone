@@ -9,7 +9,7 @@ impl<L> Level for L where L: internal::Level {}
 pub trait Connected: internal::Level {}
 
 mod internal {
-    /// Marker for level of [`crate::bbit::device::BleSensor`]
+    /// Marker for level of [`crate::bbit::device::BBiteSensor`]
     pub trait Level {}
 }
 
