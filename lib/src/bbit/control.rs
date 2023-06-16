@@ -1,8 +1,9 @@
-use crate::bbit::device::{BBitResult};
+use crate::bbit::device::BBitResult;
 use crate::bbit::eeg_uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
+use core::slice::from_raw_parts;
 
 /// Struct that has access to command point.
 #[derive(Debug, PartialEq, Eq)]
@@ -44,7 +45,7 @@ impl ControlPoint {
     }
 
     unsafe fn get_enum_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
+        from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
     }
 }
 

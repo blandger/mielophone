@@ -10,6 +10,7 @@ use std::{
 use tracing::instrument;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+use chrono::Utc;
 use tokio::io::AsyncWriteExt;
 use tokio::{
     fs::File,
@@ -57,7 +58,7 @@ impl Handler {
     async fn new() -> color_eyre::Result<Self> {
         Ok(Self {
             output: Mutex::new(
-                File::create(format!("output_battery_level.txt")).await?,
+                File::create(format!("main_app_output.txt")).await?,
                 // .map_err(|error| lib::Error::HandlerError),
             ),
         })
@@ -68,8 +69,10 @@ impl Handler {
 impl EventHandler for Handler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {
+        let time = Utc::now();
+        let formatted = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         tracing::debug!("received Status: {status_data:?}");
-        let msg = format!("DS = {status_data:?}\n");
+        let msg = format!("{formatted:?} - DS = {status_data:?}\n");
         {
             let mut lock = self.output.lock().await;
             lock.write_all(msg.as_bytes()).await.unwrap();

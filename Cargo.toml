@@ -1,7 +1,23 @@
+# Vitrial workspace now
 [workspace]
 members = [
     "mainapp",
     "lib",
     "examples/connect",
-    "examples/battery_level"
+    "examples/battery_level",
 ]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
+edition = "2021"
+repository = "https://github.com/blandger/mielophone"
+
+[workspace.dependencies]
+btleplug = { version = "0.10.5", features = ["serde"] }
+tokio = { version = "1.28.2", features = ["full"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+
+color-eyre = "0.6.2"
+chrono = "0.4.25"
