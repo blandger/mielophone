@@ -28,6 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
         .await?
         .listen(EventType::State) // subscribe to device status changes
+        // .listen(EventType::Resistance)
         .build()
         .await?
         .event_loop(Handler::new().await?)

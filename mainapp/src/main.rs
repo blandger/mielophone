@@ -34,15 +34,15 @@ async fn main() -> color_eyre::Result<()> {
         .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
         .await?
         .listen(EventType::State)
-        .listen(EventType::Resistance)
         .build()
-        .await?
-        .event_loop(Handler::new().await?)
-        .await;
+        .await?;
+
+    let handler = connected.event_loop(Handler::new().await?).await;
     tracing::info!("started event loop");
+    handler.start().await;
 
     get_finish().await?;
-    connected.stop().await;
+    handler.stop().await;
 
     tracing::info!("stopped the event loop, finishing");
 
@@ -71,8 +71,8 @@ impl EventHandler for Handler {
     async fn device_status_update(&self, status_data: DeviceStatusData) {
         let time = Utc::now();
         let formatted = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        tracing::debug!("received Status: {status_data:?}");
         let msg = format!("{formatted:?} - DS = {status_data:?}\n");
+        tracing::debug!(msg);
         {
             let mut lock = self.output.lock().await;
             lock.write_all(msg.as_bytes()).await.unwrap();
@@ -92,8 +92,10 @@ impl EventHandler for Handler {
 
     #[instrument(skip_all)]
     async fn resistance_update(&self, resists_data: Vec<u8>) {
-        tracing::debug!("received RESIST: {resists_data:?}");
-        let msg = format!("R={resists_data:?}\n");
+        let time = Utc::now();
+        let formatted = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let msg = format!("{formatted:?} - R={resists_data:?}\n");
+        tracing::debug!(msg);
         {
             let mut lock = self.output.lock().await;
             lock.write_all(msg.as_bytes()).await.unwrap();
@@ -122,7 +124,9 @@ async fn get_finish() -> color_eyre::Result<()> {
 
     loop {
         io::stdin().read_line(&mut buf)?;
-        if buf.trim().to_ascii_lowercase() == "y" {
+        let control_letter = buf.trim().to_ascii_lowercase();
+        if control_letter == "y" {
+            tracing::debug!("entered letter: {control_letter:?}");
             let _ = tx.send(());
             task.await?;
             return Ok(());
