@@ -88,28 +88,33 @@ impl TryFrom<Vec<u8>> for DeviceStatusData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nss2Status {
     /// initial = invalid state
-    Initial,
+    Initial = 0x00,
     /// service is initialized, stopped, but it is ready to start work
-    Stopped,
+    Stopped = 0x01,
     /// sensor is connected, started signal measurement, service sends eeg data to host
-    EegTransmission,
+    EegTransmission = 0x02,
     /// sensor is connected, started resistance measurement, service sends resist data to host
-    ResistTransmission,
+    ResistTransmission = 0x03,
     /// DFU loader mode
-    DfuBootLoderMode,
+    DfuBootLoderMode = 0x04,
 }
 impl TryFrom<u8> for Nss2Status {
     type Error = &'static str;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x0 => Ok(Self::Initial),
-            0x1 => Ok(Self::Stopped),
-            0x2 => Ok(Self::EegTransmission),
-            0x3 => Ok(Self::ResistTransmission),
-            0x4 => Ok(Self::DfuBootLoderMode),
+            0x00 => Ok(Self::Initial),
+            0x01 => Ok(Self::Stopped),
+            0x02 => Ok(Self::EegTransmission),
+            0x03 => Ok(Self::ResistTransmission),
+            0x04 => Ok(Self::DfuBootLoderMode),
             _ => Err("Nss2Status value is incorrect"),
         }
+    }
+}
+impl Into<u8> for Nss2Status {
+    fn into(self) -> u8 {
+        self as u8
     }
 }
 

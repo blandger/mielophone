@@ -1,13 +1,14 @@
 use crate::bbit::control::{ControlPoint, ControlPointCommand};
 use crate::bbit::eeg_uuids::{
     EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
-    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, PERIPHERAL_NAME_MATCH_FILTER,
+    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
     SERIAL_NUMBER_STRING_UUID,
 };
-use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
+use crate::bbit::responses::{DeviceInfo, DeviceStatusData, Nss2Status};
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::{find_characteristic, Error, EventHandler};
 
+use crate::bbit::{ADS1294ChannelInput, MeasurementType};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
@@ -60,22 +61,23 @@ impl BBitSensor<Bluetooth> {
     /// Connect to a device. Blocks until a connection is found
     #[instrument(skip(self))]
     pub async fn block_connect(mut self, device_name: &str) -> BBitResult<BBitSensor<Configure>> {
-        let error_on_connect_attempts_count = 20; // error attempts
+        let mut error_on_connect_max_attempts_count = 20; // error attempts
 
         while !self.is_connected().await {
-            // create CONNECT_ATTEMPTS_COUNT connect attempts
+            // try to do specified connect attempts
             match self.try_connect(device_name).await {
                 Err(e @ Error::NoBleAdaptor) => {
                     tracing::error!("No bluetooth adaptors found");
                     return Err(e);
                 }
                 Err(e) => {
-                    let attempts_done = error_on_connect_attempts_count - 1;
-                    tracing::warn!("Could not connect to '{device_name}' on attempt = '{attempts_done}', error: {}", e);
-                    if attempts_done <= 0 {
+                    error_on_connect_max_attempts_count -= 1;
+                    tracing::warn!("Could not connect to '{device_name}' on attempt = '{error_on_connect_max_attempts_count}', error: {}", e);
+                    if error_on_connect_max_attempts_count <= 0 {
                         tracing::error!("Stopped connecting attempts after limit !");
                         return Err(e);
                     }
+                    tokio::time::sleep(Duration::from_secs(2)).await;
                 }
                 Ok(_) => {
                     tracing::debug!("BLE '{device_name}' is connected...");
@@ -149,10 +151,6 @@ impl BBitSensor<Bluetooth> {
     }
 
     async fn is_connected(&self) -> bool {
-        // async in iterators when?
-        // self.ble_device
-        //     .and_then(|d| d.is_connected().await.ok())
-        //     .ok_or(false)
         if let Some(device) = &self.ble_device {
             if let Ok(v) = device.is_connected().await {
                 return v;
@@ -176,7 +174,9 @@ impl BBitSensor<Bluetooth> {
         };
 
         tracing::debug!("Start scanning for 2 sec...");
-        central.start_scan(ScanFilter::default()).await?;
+        let mut scan_filter = ScanFilter::default();
+        scan_filter.services.push(NSS2_SERVICE_UUID);
+        central.start_scan(scan_filter).await?;
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         for p in central.peripherals().await? {
@@ -185,9 +185,7 @@ impl BBitSensor<Bluetooth> {
                 .unwrap()
                 .local_name
                 .iter()
-                .any(|name| {
-                    name.starts_with(PERIPHERAL_NAME_MATCH_FILTER) || name.starts_with(device_name)
-                })
+                .any(|name| name.starts_with(device_name))
             {
                 self.ble_device = Some(p);
                 break;
@@ -280,6 +278,7 @@ impl BBitSensor<EventLoop> {
         }
         let bt_sensor = Arc::new(self);
         let event_sensor = Arc::clone(&bt_sensor);
+
         tracing::info!("starting bluetooth task");
         let (bt_tx, mut bt_rx) = mpsc::channel(128);
         let (pause_tx, pause_rx) = watch::channel(false);
@@ -296,6 +295,7 @@ impl BBitSensor<EventLoop> {
                 }
                 if data.uuid == NotifyUuid::DeviceStateChange.into() {
                     let result = DeviceStatusData::try_from(data.value);
+                    tracing::debug!("received DeviceStatusData: {result:?}");
                     match result {
                         Ok(status_data) => {
                             let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await else { break };
@@ -309,6 +309,7 @@ impl BBitSensor<EventLoop> {
                     let Ok(_) = bt_tx.send(BluetoothEvent::Egg(eeg_data)).await else { break };
                 } else if data.uuid == NotifyUuid::ResistanceMeasurement.into() {
                     let resist_data = data.value;
+                    tracing::debug!("received resist_data: {resist_data:?}");
                     let Ok(_) = bt_tx.send(BluetoothEvent::Resistance(resist_data)).await else { break };
                 }
             }
@@ -320,9 +321,10 @@ impl BBitSensor<EventLoop> {
         let (event_tx, mut event_rx) = mpsc::channel(4);
         tokio::task::spawn(async move {
             loop {
+                // either BLE messages or commands comes
                 tokio::select! {
                     Some(data) = bt_rx.recv() => {
-                        tracing::debug!("received bt channel message");
+                        tracing::debug!("received bt channel message: {data:?}");
                         use BluetoothEvent::*;
                         match data {
                             DeviceStatus(status_data) => handler.device_status_update(status_data).await,
@@ -337,16 +339,12 @@ impl BBitSensor<EventLoop> {
                                 break;
                             },
                             BleDeviceEvent::StartSignal => {
-                            // BleDeviceEvent::Add { ty, ret } => {
-                                let res = event_sensor.start_signal_measurement().await;
+                                let res = event_sensor.start_measurement(MeasurementType::Eeg).await;
                                 tracing::debug!("Started Signal Measurement?: {res:?}");
-                                // let _ = ret.send(res);
                             },
                             BleDeviceEvent::StartResistance => {
-                            // BleDeviceEvent::Remove { ty, ret } => {
-                                let res = event_sensor.start_resist_measurement().await;
+                                let res = event_sensor.start_measurement(MeasurementType::Resistance).await;
                                 tracing::debug!("Started Resists Measurement?: {res:?}");
-                            //     let _ = ret.send(res);
                             },
                         }
                     }
@@ -468,7 +466,10 @@ impl<L: Level + Connected> BBitSensor<L> {
         Ok(())
     }
 
+    /// Stop any type of possible measurement
+    #[instrument(skip(self))]
     async fn stop_measurement(&self) -> BBitResult<()> {
+        tracing::debug!("Stopping any measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         controller
@@ -477,25 +478,36 @@ impl<L: Level + Connected> BBitSensor<L> {
         Ok(())
     }
 
-    async fn start_resist_measurement(&self) -> BBitResult<()> {
+    /// We start measurement (resistance OR eeg) by sending command for one EEG channel and collecting
+    /// returned data.
+    #[instrument(skip(self))]
+    async fn start_measurement(&self, measure_type: MeasurementType) -> BBitResult<()> {
+        tracing::debug!("Starting an '{measure_type:?}' measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
-        let start_resist_measurement_command: ControlPointCommand =
-            ControlPointCommand::StartResist([4, 0, 0, 0, 0, 0, 0, 0]);
+        let command: ControlPointCommand = match measure_type {
+            MeasurementType::Resistance => ControlPointCommand::StartResist([
+                Nss2Status::ResistTransmission.into(),
+                ADS1294ChannelInput::PowerDownGain3.into(),
+                ADS1294ChannelInput::PowerUpGain1.into(),
+                ADS1294ChannelInput::PowerUpGain1.into(),
+                ADS1294ChannelInput::PowerUpGain1.into(),
+                0x00,
+                0x00,
+                0x0,
+            ]),
+            MeasurementType::Eeg => ControlPointCommand::StartEegSignal([
+                Nss2Status::EegTransmission.into(),
+                0,
+                0,
+                0,
+                0,
+            ]),
+        };
         controller
-            .send_control_command_enum(&device, &start_resist_measurement_command)
+            .send_control_command_enum(&device, &command)
             .await?;
-        Ok(())
-    }
-
-    async fn start_signal_measurement(&self) -> BBitResult<()> {
-        let controller = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
-        let start_signal_measurement_command: ControlPointCommand =
-            ControlPointCommand::StartEegSignal([2, 0, 0, 0, 0]);
-        controller
-            .send_control_command_enum(&device, &start_signal_measurement_command)
-            .await?;
+        tracing::debug!("Started an '{measure_type:?}' measurement");
         Ok(())
     }
 }
@@ -520,6 +532,13 @@ impl BleHandle {
     pub async fn stop(self) {
         tracing::info!("stopping bbit sensor");
         let _ = self.sender.send(BleDeviceEvent::Stop).await;
+    }
+
+    /// Stop Signal or Resistance measurement
+    #[instrument(skip(self))]
+    pub async fn start(&self) {
+        tracing::info!("starting Resistance measurement on bbit sensor...");
+        let _ = self.sender.send(BleDeviceEvent::StartResistance).await;
     }
 
     /// Pause handling of bluetooth events. This will stop all Bluetooth
