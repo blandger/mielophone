@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .event_loop(Handler::new().await?)
         .await;
     tracing::info!("BrainBit is connected, event loop is started");
+    // connected.start();
 
     get_finish().await?;
     connected.stop().await;

@@ -265,15 +265,21 @@ impl BBitSensor<EventLoop> {
     #[instrument(skip_all)]
     pub async fn event_loop<H: EventHandler + Sync + Send + 'static>(
         self,
-        handler: H,
+        mut handler: H,
     ) -> BleHandle {
-        tracing::info!("starting measurements");
+        tracing::info!(
+            "starting event_loop... we have events = {:?}",
+            &self.subscribed_data_event_types
+        );
 
         // look for subscribed events
         for event_type in &self.subscribed_data_event_types {
             use EventType::*;
             if let State = event_type {
                 let _ = self.subscribe_device_status_change().await;
+            }
+            if let Resistance = event_type {
+                let _ = self.subscribe(NotifyStream::ResistanceMeasurement).await;
             }
         }
         let bt_sensor = Arc::new(self);

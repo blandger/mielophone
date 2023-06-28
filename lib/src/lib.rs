@@ -52,7 +52,7 @@ pub trait EventHandler {
     /// Dispatched when an resistance data is received.
     ///
     /// Contains information about the O1, O2, T3, T4 resistance against Reference.
-    async fn resistance_update(&self, _resists_data: Vec<u8>) {}
+    async fn resistance_update(&mut self, _resists_data: Vec<u8>) {}
 
     /// Dispatched when measurement data is received over the PMD data UUID.
     ///
