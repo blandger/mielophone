@@ -1,3 +1,9 @@
+use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
+
+// Maximum battery level encoded in byte without sign (highest bit)
+pub(crate) const MAX_BATTERY_LEVEL: u8 = 0x57; // 87 in decimal
+
 /// A common device's state type
 // ??? Probably it's returned from UUID = 6E400002-B534-F393-68A9-E50E24DCCA9E (READ / NOTIFY)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,9 +60,20 @@ pub struct DeviceStatusData {
     // Error code. It's reset when new command is received
     pub cmd_error: CommandResultError,
     /// Battery level in percents (%) is stored by lower seven bits, 8-th bit keeps 'charging flag'
-    pub battery_level: u8,
+    pub battery_level: u8, // 87 is a max value = 100% charge
     /// Firmware version
     pub firmware_version: u8,
+}
+
+impl DeviceStatusData {
+    /// Return battery charge level in % percents
+    pub fn get_battery_charge_level(&self) -> f32 {
+        (self.battery_level as f32) * 100.0 / MAX_BATTERY_LEVEL as f32
+    }
+    pub fn get_battery_charge_level_string(&self) -> Cow<'_, str> {
+        let value = self.get_battery_charge_level();
+        format!("{:03.1?}", value).into()
+    }
 }
 
 impl TryFrom<Vec<u8>> for DeviceStatusData {
@@ -81,6 +98,18 @@ impl TryFrom<Vec<u8>> for DeviceStatusData {
             battery_level,
             firmware_version,
         })
+    }
+}
+
+impl Display for DeviceStatusData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Status='{:?}', Err={:?}, Bat='{:03.1?}%'",
+            self.status_nss2,
+            self.cmd_error,
+            self.get_battery_charge_level() // formatted as 89.7%
+        )
     }
 }
 
@@ -138,5 +167,53 @@ impl TryFrom<u8> for CommandResultError {
             0x2 => Ok(Self::ErrorSwitchMode),
             _ => Err("BBit command execution result error"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_max_battery_level() {
+        let MAX_LEVEL: u8 = 0x57; // 87 decimal
+        let source_data: Vec<u8> = vec![0x00, 0x00, MAX_BATTERY_LEVEL, 0x00];
+        let status_result = source_data.try_into();
+        tracing::trace!("{status_result:?}");
+        assert!(status_result.is_ok());
+        let status: DeviceStatusData = status_result.unwrap();
+        assert_eq!(87, status.battery_level);
+        tracing::trace!("{:?}", status.get_battery_charge_level());
+        assert_eq!(100f32, status.get_battery_charge_level());
+    }
+
+    #[test]
+    fn test_usual_battery_level() {
+        let current_level: u8 = 0x51; // 81 decimal
+        let source_data: Vec<u8> = vec![0x00, 0x00, current_level, 0x00];
+        let status_result = source_data.try_into();
+        tracing::trace!("{status_result:?}");
+        assert!(status_result.is_ok());
+        let status: DeviceStatusData = status_result.unwrap();
+        assert_eq!(81, status.battery_level);
+        tracing::trace!("{:?}", status.get_battery_charge_level());
+        assert_eq!(93.10345, status.get_battery_charge_level());
+    }
+
+    #[test]
+    fn test_low_battery_level() {
+        let current_level: u8 = 0x43; // 87 decimal
+        let source_data: Vec<u8> = vec![0x00, 0x00, current_level, 0x00];
+        let status_result = source_data.try_into();
+        tracing::trace!("{status_result:?}");
+        assert!(status_result.is_ok());
+        let status: DeviceStatusData = status_result.unwrap();
+        assert_eq!(67, status.battery_level);
+        tracing::trace!("{:?}", status.get_battery_charge_level());
+        assert_eq!(77.0115, status.get_battery_charge_level());
+        assert_eq!(
+            String::from("77.0"),
+            status.get_battery_charge_level_string()
+        );
     }
 }

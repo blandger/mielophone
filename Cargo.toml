@@ -14,10 +14,14 @@ edition = "2021"
 repository = "https://github.com/blandger/mielophone"
 
 [workspace.dependencies]
-btleplug = { version = "0.10.5", features = ["serde"] }
+btleplug = { version = "0.11.0", features = ["serde"] }
+#btleplug = { path = "../btleplug-blandger" }
 tokio = { version = "1.28.2", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 
 color-eyre = "0.6.2"
 chrono = "0.4.25"
+
+#[build]
+#rustflags = ["-C", "link-args=-gz"] #zip debug data

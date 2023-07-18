@@ -238,16 +238,18 @@ impl BBitSensor<Configure> {
     /// Produce the sensor ready for build
     #[instrument(skip(self))]
     pub async fn build(self) -> BBitResult<BBitSensor<EventLoop>> {
+        tracing::info!(
+            "Building sensor... Make sure measurements from previous connections are stopped."
+        );
+        self.stop_measurement().await?;
         if self.level.eeg_rate {
-            tracing::debug!("Subs to Resist");
+            tracing::debug!("Will subscribe to Resist event...");
             self.subscribe(EventType::Resistance.into()).await?;
         }
         if self.level.device_status {
-            tracing::debug!("Subs to Dev Status");
+            tracing::debug!("Will subscribe to DeviceStatus event...");
             self.subscribe(EventType::State.into()).await?;
         }
-        tracing::info!("Make sure measurements from previous connections are stopped");
-        self.stop_measurement().await?;
 
         Ok(BBitSensor {
             ble_manager: self.ble_manager,
@@ -268,7 +270,7 @@ impl BBitSensor<EventLoop> {
         mut handler: H,
     ) -> BleHandle {
         tracing::info!(
-            "starting event_loop... we have events = {:?}",
+            "starting event_loop... we have event list to subscribe to: {:?}",
             &self.subscribed_data_event_types
         );
 
@@ -285,7 +287,7 @@ impl BBitSensor<EventLoop> {
         let bt_sensor = Arc::new(self);
         let event_sensor = Arc::clone(&bt_sensor);
 
-        tracing::info!("starting bluetooth task");
+        tracing::info!("loop - starting bluetooth task");
         let (bt_tx, mut bt_rx) = mpsc::channel(128);
         let (pause_tx, pause_rx) = watch::channel(false);
 
@@ -294,14 +296,14 @@ impl BBitSensor<EventLoop> {
             let mut notification_stream = device.notifications().await?;
 
             while let Some(data) = notification_stream.next().await {
-                tracing::debug!("received bluetooth data: {data:?}");
+                tracing::trace!("loop - received bluetooth data: {:02X?}", data);
                 if *pause_rx.borrow() {
-                    tracing::debug!("paused: ignoring data all data");
+                    tracing::debug!("loop paused: ignoring data all data");
                     continue;
                 }
                 if data.uuid == NotifyUuid::DeviceStateChange.into() {
                     let result = DeviceStatusData::try_from(data.value);
-                    tracing::debug!("received DeviceStatusData: {result:?}");
+                    tracing::debug!("loop - received DeviceStatusData: {result:?}");
                     match result {
                         Ok(status_data) => {
                             let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await else { break };
@@ -315,7 +317,7 @@ impl BBitSensor<EventLoop> {
                     let Ok(_) = bt_tx.send(BluetoothEvent::Egg(eeg_data)).await else { break };
                 } else if data.uuid == NotifyUuid::ResistanceMeasurement.into() {
                     let resist_data = data.value;
-                    tracing::debug!("received resist_data: {resist_data:?}");
+                    tracing::debug!("loop - received resist_data: {resist_data:?}");
                     let Ok(_) = bt_tx.send(BluetoothEvent::Resistance(resist_data)).await else { break };
                 }
             }
@@ -368,7 +370,7 @@ impl BBitSensor<EventLoop> {
 impl<L: Level + Connected> BBitSensor<L> {
     #[instrument(skip(self))]
     async fn subscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
-        tracing::info!("subscribing to '{:?}'", notify_stream);
+        tracing::info!("subscribing to stream of '{:#?}' type...", notify_stream);
         let device = self.ble_device.as_ref().expect("device already connected");
 
         let characteristics = device.characteristics();
@@ -378,13 +380,13 @@ impl<L: Level + Connected> BBitSensor<L> {
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.subscribe(&characteristic).await?;
-        tracing::debug!("subscribed to '{:?}'", notify_stream);
+        tracing::debug!("DONE, subscribed to stream of '{:?}' type", notify_stream);
         Ok(())
     }
 
     #[instrument(skip(self))]
     async fn unsubscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
-        tracing::info!("unsubscribing from '{notify_stream:?}'");
+        tracing::info!("unsubscribing from stream of '{notify_stream:?} type...'");
         let device = self.ble_device.as_ref().unwrap();
 
         let characteristics = device.characteristics();
@@ -394,6 +396,10 @@ impl<L: Level + Connected> BBitSensor<L> {
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.unsubscribe(&characteristic).await?;
+        tracing::debug!(
+            "DONE, unsubscribed from stream of '{:?}' type",
+            notify_stream
+        );
 
         Ok(())
     }

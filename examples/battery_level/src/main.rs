@@ -59,8 +59,7 @@ impl Handler {
 impl EventHandler for Handler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {
-        let level = status_data.battery_level;
-        tracing::debug!("received Status: {status_data:?}, battery = '{level:?}'");
+        tracing::debug!("received Status: {status_data}");
         COUNTER.fetch_add(1, Ordering::SeqCst);
     }
 }
