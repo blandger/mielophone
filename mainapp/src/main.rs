@@ -24,7 +24,20 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[instrument]
 async fn main() -> color_eyre::Result<()> {
     tracing_subscriber::registry()
-        .with(fmt::layer())
+        .with(
+            fmt::layer()
+                .compact()
+                // Display source code file paths
+                .with_file(true)
+                // Display source code line numbers
+                .with_line_number(true)
+                // Display the thread ID an event was recorded on
+                .with_thread_ids(true)
+                // Don't display the event's target (module path)
+                .with_target(false),
+            // Build the subscriber
+            // .finish(),
+        )
         .with(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "mainapp=DEBUG,lib=DEBUG".into()),
         )
@@ -95,8 +108,9 @@ impl EventHandler for Handler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {
         let time = Utc::now();
-        let formatted = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        let msg = format!("{formatted:?} - DS = {status_data:?}");
+        let formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        // formatted = formatted.replace("\'", "");
+        let msg = format!("{formatted:?} - {status_data}\n");
         tracing::debug!(msg);
         {
             let mut lock = self.output.lock().await;
@@ -116,9 +130,10 @@ impl EventHandler for Handler {
     }
 
     #[instrument(skip_all)]
-    async fn resistance_update<'a>(self: &'a mut Handler, resists_data: Vec<u8>) {
+    async fn resistance_update(self: &mut Handler, resists_data: Vec<u8>) {
         let time = Utc::now();
-        let formatted = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let mut formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        formatted = formatted.replace("\'", "");
         let msg = format!("{formatted:?} - R={resists_data:?}");
         tracing::debug!(msg);
         if self.skipped_resist_records_number > 0 {
@@ -131,11 +146,11 @@ impl EventHandler for Handler {
             let mut lock = self.output.lock().await;
             lock.write_all(msg.as_bytes()).await.unwrap();
         }
-        let gethered_records_number = self.get_resist_measure_records_len();
-        if gethered_records_number >= STORE_RESIST_RECORDS_NUMBER as usize {
+        let gathered_records_number = self.get_resist_measure_records_len();
+        if gathered_records_number >= STORE_RESIST_RECORDS_NUMBER as usize {
             tracing::debug!(
                 "Gathered = {:?} records for ch='{}'",
-                gethered_records_number,
+                gathered_records_number,
                 self.current_chanel_number_resist_measure
             );
             // got to next channel

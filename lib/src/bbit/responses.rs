@@ -176,7 +176,6 @@ mod tests {
 
     #[test]
     fn test_max_battery_level() {
-        let MAX_LEVEL: u8 = 0x57; // 87 decimal
         let source_data: Vec<u8> = vec![0x00, 0x00, MAX_BATTERY_LEVEL, 0x00];
         let status_result = source_data.try_into();
         tracing::trace!("{status_result:?}");

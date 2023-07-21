@@ -17,7 +17,7 @@ use futures::stream::StreamExt;
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{mpsc, oneshot, watch};
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -248,7 +248,7 @@ impl BBitSensor<Configure> {
         }
         if self.level.device_status {
             tracing::debug!("Will subscribe to DeviceStatus event...");
-            self.subscribe(EventType::State.into()).await?;
+            self.subscribe_device_status_change().await?;
         }
 
         Ok(BBitSensor {
@@ -296,14 +296,14 @@ impl BBitSensor<EventLoop> {
             let mut notification_stream = device.notifications().await?;
 
             while let Some(data) = notification_stream.next().await {
-                tracing::trace!("loop - received bluetooth data: {:02X?}", data);
+                tracing::trace!("loop - received bluetooth data: {:04X?}", data);
                 if *pause_rx.borrow() {
                     tracing::debug!("loop paused: ignoring data all data");
                     continue;
                 }
                 if data.uuid == NotifyUuid::DeviceStateChange.into() {
                     let result = DeviceStatusData::try_from(data.value);
-                    tracing::debug!("loop - received DeviceStatusData: {result:?}");
+                    tracing::trace!("loop - received DeviceStatusData: {result:?}");
                     match result {
                         Ok(status_data) => {
                             let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await else { break };
@@ -332,7 +332,7 @@ impl BBitSensor<EventLoop> {
                 // either BLE messages or commands comes
                 tokio::select! {
                     Some(data) = bt_rx.recv() => {
-                        tracing::debug!("received bt channel message: {data:?}");
+                        tracing::debug!("received bt channel message: {:04X?}", data);
                         use BluetoothEvent::*;
                         match data {
                             DeviceStatus(status_data) => handler.device_status_update(status_data).await,
@@ -341,18 +341,22 @@ impl BBitSensor<EventLoop> {
                         }
                     }
                     Some(event) = event_rx.recv() => {
-                        tracing::debug!("received event: {event:?}");
+                        tracing::debug!("received event: {:04x?}", event);
                         match event {
                             BleDeviceEvent::Stop => {
+                                let res = event_sensor.stop_measurement().await;
+                                tracing::debug!("Stop Signal?: {res:?}");
                                 break;
                             },
-                            BleDeviceEvent::StartSignal => {
+                            BleDeviceEvent::StartSignal{ret} => {
                                 let res = event_sensor.start_measurement(MeasurementType::Eeg).await;
                                 tracing::debug!("Started Signal Measurement?: {res:?}");
+                                let _ = ret.send(res);
                             },
-                            BleDeviceEvent::StartResistance => {
+                            BleDeviceEvent::StartResistance{ret} => {
                                 let res = event_sensor.start_measurement(MeasurementType::Resistance).await;
                                 tracing::debug!("Started Resists Measurement?: {res:?}");
+                                let _ = ret.send(res);
                             },
                         }
                     }
@@ -499,27 +503,20 @@ impl<L: Level + Connected> BBitSensor<L> {
         let device = self.ble_device.as_ref().unwrap();
         let command: ControlPointCommand = match measure_type {
             MeasurementType::Resistance => ControlPointCommand::StartResist([
-                Nss2Status::ResistTransmission.into(),
                 ADS1294ChannelInput::PowerDownGain3.into(),
                 ADS1294ChannelInput::PowerUpGain1.into(),
                 ADS1294ChannelInput::PowerUpGain1.into(),
                 ADS1294ChannelInput::PowerUpGain1.into(),
-                0x00,
-                0x00,
+                0x03,
+                0x03,
                 0x0,
             ]),
-            MeasurementType::Eeg => ControlPointCommand::StartEegSignal([
-                Nss2Status::EegTransmission.into(),
-                0,
-                0,
-                0,
-                0,
-            ]),
+            MeasurementType::Eeg => ControlPointCommand::StartEegSignal([0, 0, 0, 0]),
         };
         controller
             .send_control_command_enum(&device, &command)
             .await?;
-        tracing::debug!("Started an '{measure_type:?}' measurement");
+        tracing::debug!("DONE. Started an '{measure_type:?}' measurement");
         Ok(())
     }
 }
@@ -546,11 +543,17 @@ impl BleHandle {
         let _ = self.sender.send(BleDeviceEvent::Stop).await;
     }
 
-    /// Stop Signal or Resistance measurement
+    /// Start Signal or Resistance measurement
     #[instrument(skip(self))]
-    pub async fn start(&self) {
+    pub async fn start(&self) -> Option<BBitResult<()>> {
         tracing::info!("starting Resistance measurement on bbit sensor...");
-        let _ = self.sender.send(BleDeviceEvent::StartResistance).await;
+        let (ret, rx) = oneshot::channel();
+        let _ = self
+            .sender
+            .send(BleDeviceEvent::StartResistance { ret })
+            .await;
+
+        rx.await.ok()
     }
 
     /// Pause handling of bluetooth events. This will stop all Bluetooth
@@ -576,9 +579,15 @@ enum BleDeviceEvent {
     /// Stop the Signal or Resistance measurement
     Stop,
     /// Send config command for Signal and start the event loop
-    StartSignal,
+    StartSignal {
+        /// channel to receive return value
+        ret: oneshot::Sender<BBitResult<()>>,
+    },
     /// Start resistance measurement
-    StartResistance,
+    StartResistance {
+        /// channel to receive return value
+        ret: oneshot::Sender<BBitResult<()>>,
+    },
 }
 
 /// Bluetooth data received from the sensor
