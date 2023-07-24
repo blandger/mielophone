@@ -1,4 +1,4 @@
-use crate::bbit::control::{ControlPoint, ControlPointCommand};
+use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
 use crate::bbit::eeg_uuids::{
     EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
     HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
@@ -296,7 +296,7 @@ impl BBitSensor<EventLoop> {
             let mut notification_stream = device.notifications().await?;
 
             while let Some(data) = notification_stream.next().await {
-                tracing::trace!("loop - received bluetooth data: {:04X?}", data);
+                tracing::trace!("loop - received bluetooth data: {:02X?}", data);
                 if *pause_rx.borrow() {
                     tracing::debug!("loop paused: ignoring data all data");
                     continue;
@@ -332,7 +332,7 @@ impl BBitSensor<EventLoop> {
                 // either BLE messages or commands comes
                 tokio::select! {
                     Some(data) = bt_rx.recv() => {
-                        tracing::debug!("received bt channel message: {:04X?}", data);
+                        tracing::debug!("received bt channel message: {:02X?}", data);
                         use BluetoothEvent::*;
                         match data {
                             DeviceStatus(status_data) => handler.device_status_update(status_data).await,
@@ -341,7 +341,7 @@ impl BBitSensor<EventLoop> {
                         }
                     }
                     Some(event) = event_rx.recv() => {
-                        tracing::debug!("received event: {:04x?}", event);
+                        tracing::debug!("received event: {:02x?}", event);
                         match event {
                             BleDeviceEvent::Stop => {
                                 let res = event_sensor.stop_measurement().await;
@@ -477,7 +477,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         let device = self.ble_device.as_ref().unwrap();
 
         control_point
-            .send_control_command_enum(device, &command)
+            .send_control_command_enum(device, command)
             .await?;
         Ok(())
     }
@@ -488,8 +488,9 @@ impl<L: Level + Connected> BBitSensor<L> {
         tracing::debug!("Stopping any measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
+        let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
         controller
-            .send_control_command_enum(&device, &ControlPointCommand::StopAll)
+            .send_control_command_enum(&device, command)
             .await?;
         Ok(())
     }
@@ -502,19 +503,28 @@ impl<L: Level + Connected> BBitSensor<L> {
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         let command: ControlPointCommand = match measure_type {
-            MeasurementType::Resistance => ControlPointCommand::StartResist([
-                ADS1294ChannelInput::PowerDownGain3.into(),
-                ADS1294ChannelInput::PowerUpGain1.into(),
-                ADS1294ChannelInput::PowerUpGain1.into(),
-                ADS1294ChannelInput::PowerUpGain1.into(),
-                0x03,
-                0x03,
-                0x0,
-            ]),
-            MeasurementType::Eeg => ControlPointCommand::StartEegSignal([0, 0, 0, 0]),
+            MeasurementType::Resistance => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0x03,
+                    0x03,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            MeasurementType::Eeg => {
+                let cmd_data = [0x00, 0x00, 0x00, 0x0];
+                ControlPointCommand::new(
+                    ControlCommandType::StartEegSignal,
+                    Some(Vec::from(cmd_data)),
+                )
+            }
         };
         controller
-            .send_control_command_enum(&device, &command)
+            .send_control_command_enum(&device, command)
             .await?;
         tracing::debug!("DONE. Started an '{measure_type:?}' measurement");
         Ok(())
