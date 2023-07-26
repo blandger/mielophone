@@ -1,3 +1,12 @@
+## BrainBit electrode info (check is needed)
+channel 0   = O1, (occipital lobe = O, left)
+channel 1   = T3, (temporal lobe = T, left)
+ch 2        = T4, (temporal lobe = T, right)
+ch 3        = O2  (occipital lobe = O, right)
+
+Should be that wat. Can be checked by shortening circuit 'referent + ground' contact with channel electrode. Zero should be visible.
+
+
 ## BrainBit BLE info
 
 | Service UUID                         |         Characteristic UUID          | Ch.Attributes |          Description          |
