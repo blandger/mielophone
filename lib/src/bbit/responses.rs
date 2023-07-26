@@ -65,6 +65,17 @@ pub struct DeviceStatusData {
     pub firmware_version: u8,
 }
 
+impl Default for DeviceStatusData {
+    fn default() -> Self {
+        Self {
+            status_nss2: Nss2Status::Initial,
+            cmd_error: CommandResultError::NoError,
+            battery_level: 0,
+            firmware_version: 0,
+        }
+    }
+}
+
 impl DeviceStatusData {
     /// Return battery charge level in % percents
     pub fn get_battery_charge_level(&self) -> f32 {
@@ -86,9 +97,7 @@ impl TryFrom<Vec<u8>> for DeviceStatusData {
             return Err("device status Vec length");
         }
         let status_nss2 = Nss2Status::try_from(value[0])?;
-        // .map_err(|_| Error::InvalidData("NSS2 status byte value".to_string()))?;
         let cmd_error = CommandResultError::try_from(value[1])?;
-        // .map_err(|_| Error::InvalidData("NSS2 CMD byte value".to_string()))?;
         let battery_level = value[2];
         let firmware_version = value[3];
 
