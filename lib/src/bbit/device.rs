@@ -4,11 +4,11 @@ use crate::bbit::eeg_uuids::{
     HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
     SERIAL_NUMBER_STRING_UUID,
 };
-use crate::bbit::responses::{DeviceInfo, DeviceStatusData, Nss2Status};
+use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::{find_characteristic, Error, EventHandler};
 
-use crate::bbit::{ADS1294ChannelInput, MeasurementType};
+use crate::bbit::{ADS1294ChannelInput, ChannelType, MeasurementType};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
@@ -224,7 +224,7 @@ impl BBitSensor<Configure> {
                     self.level.device_status = true;
                 }
             }
-            EventType::Resistance | EventType::Eeg => {
+            EventType::EegOrResistance => {
                 if !self.level.eeg_rate {
                     self.level.eeg_rate = true;
                 }
@@ -244,7 +244,7 @@ impl BBitSensor<Configure> {
         self.stop_measurement().await?;
         if self.level.eeg_rate {
             tracing::debug!("Will subscribe to Resist event...");
-            self.subscribe(EventType::Resistance.into()).await?;
+            self.subscribe(EventType::EegOrResistance.into()).await?;
         }
         if self.level.device_status {
             tracing::debug!("Will subscribe to DeviceStatus event...");
@@ -280,8 +280,10 @@ impl BBitSensor<EventLoop> {
             if let State = event_type {
                 let _ = self.subscribe_device_status_change().await;
             }
-            if let Resistance = event_type {
-                let _ = self.subscribe(NotifyStream::ResistanceMeasurement).await;
+            if let EegOrResistance = event_type {
+                let _ = self
+                    .subscribe(NotifyStream::EegOrResistanceMeasurement)
+                    .await;
             }
         }
         let bt_sensor = Arc::new(self);
@@ -312,13 +314,13 @@ impl BBitSensor<EventLoop> {
                             tracing::debug!("Error receiving Device Status data: {error:?}");
                         }
                     }
-                } else if data.uuid == NotifyUuid::EegMeasurement.into() {
-                    let eeg_data = data.value;
-                    let Ok(_) = bt_tx.send(BluetoothEvent::Egg(eeg_data)).await else { break };
-                } else if data.uuid == NotifyUuid::ResistanceMeasurement.into() {
-                    let resist_data = data.value;
-                    tracing::debug!("loop - received resist_data: {resist_data:?}");
-                    let Ok(_) = bt_tx.send(BluetoothEvent::Resistance(resist_data)).await else { break };
+                } else if data.uuid == NotifyUuid::EegOrResistanceMeasurementChange.into() {
+                    let eeg_or_resist_data = data.value;
+                    tracing::trace!(
+                        "loop - received eeg-resist_data: {:02X?}",
+                        eeg_or_resist_data
+                    );
+                    let Ok(_) = bt_tx.send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data)).await else { break };
                 }
             }
 
@@ -336,8 +338,7 @@ impl BBitSensor<EventLoop> {
                         use BluetoothEvent::*;
                         match data {
                             DeviceStatus(status_data) => handler.device_status_update(status_data).await,
-                            Egg(eeg_data) => handler.eeg_update(eeg_data).await,
-                            Resistance(resist_data) => handler.resistance_update(resist_data).await,
+                            EggOrResistanceData(eeg_data) => handler.eeg_update(eeg_data).await,
                         }
                     }
                     Some(event) = event_rx.recv() => {
@@ -353,8 +354,9 @@ impl BBitSensor<EventLoop> {
                                 tracing::debug!("Started Signal Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
-                            BleDeviceEvent::StartResistance{ret} => {
-                                let res = event_sensor.start_measurement(MeasurementType::Resistance).await;
+                            BleDeviceEvent::StartResistance{channel_type, ret} => {
+                                let res = event_sensor.start_measurement(
+                                    MeasurementType::Resistance(channel_type)).await;
                                 tracing::debug!("Started Resists Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
@@ -503,20 +505,56 @@ impl<L: Level + Connected> BBitSensor<L> {
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         let command: ControlPointCommand = match measure_type {
-            MeasurementType::Resistance => {
+            MeasurementType::Resistance(ChannelType::O1) => {
                 let cmd_data = [
                     ADS1294ChannelInput::PowerDownGain3.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
-                    0x03,
+                    0b00000001,
+                    0x01,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            MeasurementType::Resistance(ChannelType::T3) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0b00000010,
                     0x03,
                     0x0,
                 ];
                 ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
             }
+            MeasurementType::Resistance(ChannelType::T4) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0b00000100,
+                    0x05,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            MeasurementType::Resistance(ChannelType::O2) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    0b0001000,
+                    0b0001000,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
             MeasurementType::Eeg => {
-                let cmd_data = [0x00, 0x00, 0x00, 0x0];
+                let cmd_data = [ADS1294ChannelInput::PowerDownGain6.into(), 0x00, 0x00, 0x0];
                 ControlPointCommand::new(
                     ControlCommandType::StartEegSignal,
                     Some(Vec::from(cmd_data)),
@@ -558,9 +596,10 @@ impl BleHandle {
     pub async fn start(&self) -> Option<BBitResult<()>> {
         tracing::info!("starting Resistance measurement on bbit sensor...");
         let (ret, rx) = oneshot::channel();
+        let channel_type = ChannelType::O1;
         let _ = self
             .sender
-            .send(BleDeviceEvent::StartResistance { ret })
+            .send(BleDeviceEvent::StartResistance { channel_type, ret })
             .await;
 
         rx.await.ok()
@@ -595,6 +634,8 @@ enum BleDeviceEvent {
     },
     /// Start resistance measurement
     StartResistance {
+        /// Channel number/type
+        channel_type: ChannelType,
         /// channel to receive return value
         ret: oneshot::Sender<BBitResult<()>>,
     },
@@ -604,6 +645,5 @@ enum BleDeviceEvent {
 #[derive(Debug)]
 enum BluetoothEvent {
     DeviceStatus(DeviceStatusData),
-    Egg(Vec<u8>),
-    Resistance(Vec<u8>),
+    EggOrResistanceData(Vec<u8>),
 }

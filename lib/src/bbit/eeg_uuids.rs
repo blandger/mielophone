@@ -41,9 +41,7 @@ pub enum NotifyUuid {
     /// Notify about device status change, including command errors, battery level change
     DeviceStateChange,
     /// Notify about EEG signal measurement/updates
-    EegMeasurement,
-    /// Notify about resistance signal measurement/updates
-    ResistanceMeasurement,
+    EegOrResistanceMeasurementChange,
 }
 
 /// A list of stream types that can be subscribed to.
@@ -52,9 +50,7 @@ pub enum NotifyStream {
     /// Device status updates, includes command errors, battery level
     DeviceState,
     /// Receive eeg data updates.
-    EegMeasurement,
-    /// Receive eeg data updates.
-    ResistanceMeasurement,
+    EegOrResistanceMeasurement,
 }
 
 impl From<NotifyStream> for Uuid {
@@ -67,8 +63,7 @@ impl From<NotifyStream> for NotifyUuid {
     fn from(item: NotifyStream) -> Self {
         match item {
             NotifyStream::DeviceState => Self::DeviceStateChange,
-            NotifyStream::EegMeasurement => Self::EegMeasurement,
-            NotifyStream::ResistanceMeasurement => Self::ResistanceMeasurement,
+            NotifyStream::EegOrResistanceMeasurement => Self::EegOrResistanceMeasurementChange,
         }
     }
 }
@@ -76,12 +71,10 @@ impl From<NotifyStream> for NotifyUuid {
 /// Types the [`BleSensor`] can listen for
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventType {
-    /// EEG data
-    Eeg,
+    /// EEG data or Electrode Resistance data
+    EegOrResistance,
     /// Internal device status with additional data
     State,
-    // electrode resistance
-    Resistance,
 }
 
 impl EventType {
@@ -95,8 +88,7 @@ impl From<EventType> for NotifyStream {
     fn from(value: EventType) -> Self {
         match value {
             EventType::State => Self::DeviceState,
-            EventType::Eeg => Self::EegMeasurement,
-            EventType::Resistance => Self::ResistanceMeasurement,
+            EventType::EegOrResistance => Self::EegOrResistanceMeasurement,
         }
     }
 }
@@ -105,8 +97,7 @@ impl From<EventType> for NotifyUuid {
     fn from(value: EventType) -> Self {
         match value {
             EventType::State => Self::DeviceStateChange,
-            EventType::Eeg => Self::EegMeasurement,
-            EventType::Resistance => Self::ResistanceMeasurement,
+            EventType::EegOrResistance => Self::EegOrResistanceMeasurementChange,
         }
     }
 }
@@ -115,8 +106,7 @@ impl From<NotifyUuid> for Uuid {
     fn from(item: NotifyUuid) -> Self {
         match item {
             NotifyUuid::DeviceStateChange => DEVICE_STATE_NOTIFY_CHARACTERISTIC_UUID,
-            NotifyUuid::EegMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
-            NotifyUuid::ResistanceMeasurement => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
+            NotifyUuid::EegOrResistanceMeasurementChange => EEG_DATA_NOTIFY_CHARACTERISTIC_UUID,
         }
     }
 }
