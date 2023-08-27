@@ -39,7 +39,8 @@ async fn main() -> color_eyre::Result<()> {
             // .finish(),
         )
         .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "mainapp=DEBUG,lib=DEBUG".into()),
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "mainapp=DEBUG,brainbit=DEBUG".into()),
         )
         .init();
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 edition.repository = true
-description = "Library wrapper above BLE to support BrainBit device (for now)"
+description = "Library wrapper above BLE to support BrainBit device only"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]

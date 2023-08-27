@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with(fmt::layer())
         .with(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "battery_level=DEBUG,lib=DEBUG".into()),
+                .unwrap_or_else(|_| "battery_level=DEBUG,brainbit=DEBUG".into()),
         )
         .init();
 

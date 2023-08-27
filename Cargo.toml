@@ -2,7 +2,7 @@
 [workspace]
 members = [
     "mainapp",
-    "lib",
+    "brainbit",
     "examples/connect",
     "examples/battery_level",
 ]

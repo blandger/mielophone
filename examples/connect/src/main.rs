@@ -8,7 +8,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "connect=DEBUG,lib=DEBUG".into()),
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "connect=DEBUG,brainbit=DEBUG".into()),
         )
         .init();
 

@@ -8,7 +8,7 @@ use btleplug::platform::Peripheral;
 use thiserror::Error;
 use uuid::Uuid;
 
-/// Error type for general lib errors and internal btleplug Ble errors
+/// Error type for general brainbit errors and internal btleplug Ble errors
 #[derive(Debug, Error)]
 pub enum Error {
     /// Bluetooth adapter is not found on attempt to scan it
