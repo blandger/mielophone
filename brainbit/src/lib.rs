@@ -1,7 +1,6 @@
 pub mod bbit;
 
-use crate::bbit::device::{BBitResult, CommandData};
-use crate::bbit::responses::DeviceStatusData;
+use crate::bbit::device::BBitResult;
 pub use async_trait::async_trait;
 use btleplug::api::{Characteristic, Peripheral as _};
 use btleplug::platform::Peripheral;
@@ -36,32 +35,6 @@ pub enum Error {
     HandlerError(#[from] Box<dyn std::error::Error + Sync + Send>),
 }
 
-/// Base trait for handling events coming from a BrainBit device.
-#[async_trait]
-pub trait EventHandler {
-    /// Dispatched when a internal device status update is received.
-    ///
-    /// Contains the status, cmd error, battery level.
-    async fn device_status_update(&self, _status: DeviceStatusData) {}
-
-    /// Dispatched when an eeg data is received.
-    ///
-    /// Contains information about the O1, O2, T3, T4 + interval.
-    async fn eeg_update(&mut self, _eeg_data: Vec<u8>) {}
-
-    /// Dispatched when measurement data is received over the PMD data UUID.
-    ///
-    /// Contains data in a [`CommandData`].
-    async fn send_command(&self, _command_data: CommandData) {}
-
-    /// Checked at start of each event loop.
-    ///
-    /// Returns [`false`] if the event loop should be terminated and close connection.
-    async fn should_continue(&self) -> bool {
-        true
-    }
-}
-
 /// Private helper to find characteristics from a [`Uuid`].
 async fn find_characteristic(device: &Peripheral, uuid: Uuid) -> BBitResult<Characteristic> {
     device
@@ -70,12 +43,4 @@ async fn find_characteristic(device: &Peripheral, uuid: Uuid) -> BBitResult<Char
         .find(|c| c.uuid == uuid)
         .ok_or(Error::CharacteristicNotFound)
         .cloned()
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 3, 5);
-    }
 }

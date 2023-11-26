@@ -8,11 +8,12 @@ description = "Console client app"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = { version = "0.1.0", path = "../brainbit" }
+lib = { path = "../brainbit" }
+handler = { path = "../handler" }
 
-tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 color-eyre.workspace = true
 chrono.workspace = true

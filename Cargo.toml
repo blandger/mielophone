@@ -3,9 +3,11 @@
 members = [
     "mainapp",
     "brainbit",
+    "handler",
     "examples/connect",
     "examples/battery_level",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.1.0"

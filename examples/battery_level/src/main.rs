@@ -1,7 +1,7 @@
 use lib::bbit::device::BBitSensor;
 use lib::bbit::eeg_uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 use lib::bbit::responses::DeviceStatusData;
-use lib::EventHandler;
+use lib::bbit::EventHandler;
 use std::error::Error;
 use std::{
     io::{self, Write},

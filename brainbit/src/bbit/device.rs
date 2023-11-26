@@ -6,9 +6,9 @@ use crate::bbit::eeg_uuids::{
 };
 use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
-use crate::{find_characteristic, Error, EventHandler};
+use crate::{find_characteristic, Error};
 
-use crate::bbit::{ADS1294ChannelInput, ChannelType, MeasurementType};
+use crate::bbit::{ADS1294ChannelInput, ChannelType, EventHandler, MeasurementType};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
@@ -308,7 +308,10 @@ impl BBitSensor<EventLoop> {
                     tracing::trace!("loop - received DeviceStatusData: {result:?}");
                     match result {
                         Ok(status_data) => {
-                            let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await else { break };
+                            let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await
+                            else {
+                                break;
+                            };
                         }
                         Err(error) => {
                             tracing::debug!("Error receiving Device Status data: {error:?}");
@@ -320,7 +323,12 @@ impl BBitSensor<EventLoop> {
                         "loop - received eeg-resist_data: {:02X?}",
                         eeg_or_resist_data
                     );
-                    let Ok(_) = bt_tx.send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data)).await else { break };
+                    let Ok(_) = bt_tx
+                        .send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data))
+                        .await
+                    else {
+                        break;
+                    };
                 }
             }
 

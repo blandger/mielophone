@@ -3,14 +3,6 @@ use uuid::{uuid, Uuid};
 /// Device name to search for
 pub const PERIPHERAL_NAME_MATCH_FILTER: &'static str = "BrainBit";
 
-/// GAT access service for access to several characteristics below
-// const GENERIC_ACCESS_SERVICE_UUID: Uuid = uuid!("00001800-0000-1000-8000-00805F9B34FB");
-
-/// Device name for reading (in GENERIC_ACCESS_SERVICE_UUID)
-// const DEVICE_NAME_STRING_UUID: Uuid = uuid!("00002A00-0000-1000-8000-00805F9B34FB");
-/// Device Appearance value reading (in GENERIC_ACCESS_SERVICE_UUID)
-// const DEVICE_APPEARANCE_STRING_UUID: Uuid = uuid!("00002A01-0000-1000-8000-00805F9B34FB");
-
 /// GAT attribute service for several device's characteristics
 pub const GENERIC_ATTRIBUTE_SERVICE_UUID: Uuid = uuid!("0000180A-0000-1000-8000-00805F9B34FB");
 

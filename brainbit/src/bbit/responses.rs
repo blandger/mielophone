@@ -64,7 +64,6 @@ pub struct DeviceStatusData {
     /// Firmware version
     pub firmware_version: u8,
 }
-
 impl Default for DeviceStatusData {
     fn default() -> Self {
         Self {
