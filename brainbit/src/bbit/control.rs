@@ -1,5 +1,5 @@
 use crate::bbit::device::BBitResult;
-use crate::bbit::eeg_uuids::WRITE_COMMAN_UUID;
+use crate::bbit::uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
@@ -50,10 +50,6 @@ impl ControlPoint {
             .await
             .map_err(Error::BleError)
     }
-
-    /*    unsafe fn get_enum_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-        from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-    }*/
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -154,7 +150,7 @@ impl TryFrom<&[u8]> for ControlPointCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bbit::ADS1294ChannelInput;
+    use crate::bbit::internals::ADS1294ChannelInput;
 
     #[test]
     fn test_resist_command_layout() {

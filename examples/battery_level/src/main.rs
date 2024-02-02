@@ -1,16 +1,19 @@
-use lib::bbit::device::BBitSensor;
-use lib::bbit::eeg_uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
-use lib::bbit::responses::DeviceStatusData;
-use lib::bbit::EventHandler;
 use std::error::Error;
 use std::{
     io::{self, Write},
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
+
+use async_trait::async_trait;
 use tokio::sync::oneshot;
 use tracing::instrument;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+use brainbit::bbit::device::BBitSensor;
+use brainbit::bbit::responses::DeviceStatusData;
+use brainbit::bbit::traits::EventHandler;
+use brainbit::bbit::uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 
 #[tokio::main]
 #[instrument]
@@ -55,7 +58,7 @@ impl Handler {
     }
 }
 
-#[lib::async_trait]
+#[async_trait]
 impl EventHandler for Handler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {

@@ -9,8 +9,9 @@ description = "Data handler code, calculations, resistance check"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = { path = "../brainbit" }
+brainbit = { path = "../brainbit" }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 color-eyre.workspace = true
 chrono.workspace = true
+async-trait.workspace = true

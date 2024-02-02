@@ -8,10 +8,11 @@ description = "Subscribe on BBit device status changes including battery level"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = { version = "0.1.0", path = "../../brainbit" }
+brainbit = { version = "0.1.0", path = "../../brainbit" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+async-trait.workspace = true
 
 color-eyre.workspace = true
 chrono.workspace = true

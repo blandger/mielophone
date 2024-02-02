@@ -58,7 +58,7 @@ pub struct DeviceStatusData {
     /// NNS service state
     pub status_nss2: Nss2Status,
     // Error code. It's reset when new command is received
-    pub cmd_error: CommandResultError,
+    pub cmd_error: CommandExecutionState,
     /// Battery level in percents (%) is stored by lower seven bits, 8-th bit keeps 'charging flag'
     pub battery_level: u8, // 87 is a max value = 100% charge
     /// Firmware version
@@ -68,7 +68,7 @@ impl Default for DeviceStatusData {
     fn default() -> Self {
         Self {
             status_nss2: Nss2Status::Initial,
-            cmd_error: CommandResultError::NoError,
+            cmd_error: CommandExecutionState::Ok,
             battery_level: 0,
             firmware_version: 0,
         }
@@ -96,7 +96,7 @@ impl TryFrom<Vec<u8>> for DeviceStatusData {
             return Err("device status Vec length");
         }
         let status_nss2 = Nss2Status::try_from(value[0])?;
-        let cmd_error = CommandResultError::try_from(value[1])?;
+        let cmd_error = CommandExecutionState::try_from(value[1])?;
         let battery_level = value[2];
         let firmware_version = value[3];
 
@@ -157,22 +157,22 @@ impl Into<u8> for Nss2Status {
 
 /// A main GATT NSS2 service sending, executing command result type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandResultError {
+pub enum CommandExecutionState {
     /// No error after command
-    NoError,
+    Ok,
     /// Command had an incorrect length
-    ErrorLength,
+    CommandLengthError,
     /// Error on changing device mode, changing working mode is not possible
-    ErrorSwitchMode,
+    SwitchModeError,
 }
-impl TryFrom<u8> for CommandResultError {
+impl TryFrom<u8> for CommandExecutionState {
     type Error = &'static str;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x0 => Ok(Self::NoError),
-            0x1 => Ok(Self::ErrorLength),
-            0x2 => Ok(Self::ErrorSwitchMode),
+            0x0 => Ok(Self::Ok),
+            0x1 => Ok(Self::CommandLengthError),
+            0x2 => Ok(Self::SwitchModeError),
             _ => Err("BBit command execution result error"),
         }
     }

@@ -1,5 +1,5 @@
-use lib::bbit::device::BBitSensor;
-use lib::bbit::eeg_uuids::PERIPHERAL_NAME_MATCH_FILTER;
+use brainbit::bbit::device::BBitSensor;
+use brainbit::bbit::uuids::PERIPHERAL_NAME_MATCH_FILTER;
 use std::error::Error;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 

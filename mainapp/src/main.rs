@@ -9,8 +9,8 @@ use tokio::sync::oneshot;
 use tracing::instrument;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use lib::bbit::device::BBitSensor;
-use lib::bbit::eeg_uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
+use brainbit::bbit::device::BBitSensor;
+use brainbit::bbit::uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 
 #[tokio::main]
 #[instrument]

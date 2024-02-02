@@ -1,12 +1,14 @@
 use chrono::Utc;
-use lib::bbit::resist::ResistState;
-use lib::bbit::responses::{DeviceStatusData, Nss2Status};
-use lib::bbit::EventHandler;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::instrument;
+
+use async_trait::async_trait;
+use brainbit::bbit::resist::ResistState;
+use brainbit::bbit::responses::{DeviceStatusData, Nss2Status};
+use brainbit::bbit::traits::EventHandler;
 
 const SKIP_FIRST_RESIST_RECORDS_NUMBER: u8 = 20;
 const STORE_RESIST_RECORDS_NUMBER: u8 = 20;
@@ -22,7 +24,7 @@ pub struct BBitHandler {
     resist_results: Mutex<ResistState>,
 }
 
-#[lib::async_trait]
+#[async_trait]
 impl EventHandler for BBitHandler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {

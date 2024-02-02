@@ -1,25 +1,27 @@
-use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
-use crate::bbit::eeg_uuids::{
-    EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
-    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
-    SERIAL_NUMBER_STRING_UUID,
-};
-use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
-use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
-use crate::{find_characteristic, Error};
+use std::collections::BTreeSet;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
-use crate::bbit::{ADS1294ChannelInput, ChannelType, EventHandler, MeasurementType};
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Manager, Peripheral},
 };
 use futures::stream::StreamExt;
-use std::collections::BTreeSet;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::instrument;
 use uuid::Uuid;
+
+use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
+use crate::bbit::internals::{ADS1294ChannelInput, ChannelType, MeasurementType};
+use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
+use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
+use crate::bbit::traits::EventHandler;
+use crate::bbit::uuids::{
+    EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
+    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
+    SERIAL_NUMBER_STRING_UUID,
+};
+use crate::{find_characteristic, Error};
 
 pub type BBitResult<T> = Result<T, Error>;
 
@@ -106,8 +108,8 @@ impl BBitSensor<Bluetooth> {
     /// ```rust,no_run
     /// # #[tokio::main]
     /// # async fn main() {
-    /// use lib::Error;
-    /// use lib::bbit::device::BBitSensor;
+    /// use brainbit::bbit::device::BBitSensor;
+    /// use brainbit::bbit::errors::Error;
     ///
     /// let mut bbit = BBitSensor::new().await.unwrap()
     ///     // default handling that is applied to BleSensor::block_connect
