@@ -4,6 +4,7 @@ pub mod errors;
 pub(crate) mod internals;
 pub mod resist;
 pub mod responses;
+pub mod results;
 pub(crate) mod sealed;
 pub mod traits;
 pub mod uuids;

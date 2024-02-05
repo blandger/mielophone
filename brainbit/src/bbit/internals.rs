@@ -1,5 +1,5 @@
-use crate::bbit::device::BBitResult;
 use crate::bbit::errors::Error;
+use crate::bbit::results::BBitResult;
 
 /// List of measurement types you can request.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

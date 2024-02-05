@@ -1,4 +1,4 @@
-use crate::bbit::device::BBitResult;
+use crate::bbit::results::BBitResult;
 use crate::bbit::uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};

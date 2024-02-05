@@ -5,7 +5,7 @@ use async_trait::async_trait;
 /// Base trait for handling events coming from a BrainBit device.
 #[async_trait]
 pub trait EventHandler {
-    /// Dispatched when a internal device status update is received.
+    /// Dispatched when an internal device status update is received.
     ///
     /// Contains the status, cmd error, battery level.
     async fn device_status_update(&self, _status: DeviceStatusData) {}

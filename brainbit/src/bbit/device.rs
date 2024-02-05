@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
 use crate::bbit::internals::{ADS1294ChannelInput, ChannelType, MeasurementType};
 use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
+use crate::bbit::results::BBitResult;
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::bbit::traits::EventHandler;
 use crate::bbit::uuids::{
@@ -22,8 +23,6 @@ use crate::bbit::uuids::{
     SERIAL_NUMBER_STRING_UUID,
 };
 use crate::{find_characteristic, Error};
-
-pub type BBitResult<T> = Result<T, Error>;
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
