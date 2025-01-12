@@ -2,7 +2,7 @@ use chrono::Utc;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tracing::instrument;
 
 use async_trait::async_trait;
@@ -10,18 +10,25 @@ use brainbit::bbit::resist::ResistState;
 use brainbit::bbit::responses::{DeviceStatusData, Nss2Status};
 use brainbit::bbit::traits::EventHandler;
 
-const SKIP_FIRST_RESIST_RECORDS_NUMBER: u8 = 20;
-const STORE_RESIST_RECORDS_NUMBER: u8 = 20;
+const SKIP_FIRST_RESIST_RECORDS_NUMBER: usize = 20;
+const STORE_RESIST_RECORDS_NUMBER: usize = 20;
 
 #[derive(Debug)]
 pub struct BBitHandler {
-    counter: Arc<AtomicUsize>,
+    /// count packets from device during measurement on one channel, then it switches to the next and starts again from Zero
+    current_chanel_counter: AtomicUsize,
+    /// internal device status
     device_status: Mutex<DeviceStatusData>,
+    /// data file written with device data
     output: Mutex<File>,
-    skipped_resist_records_number: AtomicUsize, // AtomicUsize = AtomicUsize::new(0);
+    /// we skip 'SKIP_FIRST_RESIST_RECORDS_NUMBER' resist records on every channel
+    skipped_resist_records_number: AtomicUsize,
+    /// we have 4 channels, so we need to know which channel is being measured
     current_chanel_number_resist_measure: AtomicUsize,
+    /// keep read records per channel measurement
     resist_measure_records: Vec<u8>,
-    resist_results: Mutex<ResistState>,
+    /// final measurement result on device after all channels are measured
+    final_resist_results: Mutex<ResistState>,
 }
 
 #[async_trait]
@@ -45,15 +52,15 @@ impl EventHandler for BBitHandler {
             lock.battery_level = status_data.battery_level;
             lock.cmd_error = status_data.cmd_error;
         }
-        self.counter.fetch_add(1, Ordering::SeqCst);
+        self.current_chanel_counter.fetch_add(1, Ordering::SeqCst);
     }
 
     #[instrument(skip_all)]
     async fn eeg_update(self: &mut BBitHandler, eeg_data: Vec<u8>) {
         let time = Utc::now();
-        let mut formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        formatted = formatted.replace("\'", "");
-        // let msg = format!("{formatted:?} - EEG={:>3?}\n", eeg_data);
+        let mut _formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        _formatted = _formatted.replace("\'", "");
+        // let msg = format!("{_formatted:?} - EEG={:>3?}\n", eeg_data);
         let msg = format!("{:>3?}\n", eeg_data);
         {
             let mut lock = self.output.lock().unwrap();
@@ -66,19 +73,19 @@ impl EventHandler for BBitHandler {
                 let skipped_number = self.skipped_resist_records_number.load(Ordering::Relaxed);
                 if skipped_number > 0 {
                     // skip 'SKIP_FIRST_RESIST_RECORDS_NUMBER' records
-                    tracing::debug!("Skipping = {:?}", skipped_number);
+                    tracing::debug!("Skipping = {:?} packet", skipped_number);
                     self.decrease_skipped_resist_records_number();
                     return;
                 }
                 let gathered_records_number = self.get_resist_measure_records_len();
-                if gathered_records_number >= STORE_RESIST_RECORDS_NUMBER as usize {
+                if gathered_records_number >= STORE_RESIST_RECORDS_NUMBER {
                     tracing::debug!(
                         "Gathered = {:?} records for ch='{}'",
                         gathered_records_number,
                         self.current_chanel_number_resist_measure
                             .load(Ordering::Relaxed)
                     );
-                    // got to next channel
+                    // go to next channel
                 }
             }
             Nss2Status::EegTransmission => {
@@ -93,17 +100,17 @@ impl EventHandler for BBitHandler {
 }
 
 impl BBitHandler {
-    pub async fn new(counter: Arc<AtomicUsize>) -> color_eyre::Result<Self> {
+    pub async fn new(log_file_name: &str) -> color_eyre::Result<Self> {
         Ok(Self {
-            counter,
+            current_chanel_counter: AtomicUsize::new(0),
             device_status: Mutex::new(DeviceStatusData::default()),
-            output: Mutex::new(File::create(format!("main_app_output.txt"))?),
+            output: Mutex::new(File::create(log_file_name)?),
             skipped_resist_records_number: AtomicUsize::new(
-                SKIP_FIRST_RESIST_RECORDS_NUMBER as usize,
+                SKIP_FIRST_RESIST_RECORDS_NUMBER,
             ),
             current_chanel_number_resist_measure: AtomicUsize::new(0),
-            resist_measure_records: Vec::with_capacity(STORE_RESIST_RECORDS_NUMBER as usize),
-            resist_results: Mutex::new(ResistState::default()),
+            resist_measure_records: Vec::with_capacity(STORE_RESIST_RECORDS_NUMBER),
+            final_resist_results: Mutex::new(ResistState::default()),
         })
     }
 

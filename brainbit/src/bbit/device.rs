@@ -266,10 +266,10 @@ impl BBitSensor<Configure> {
 impl BBitSensor<EventLoop> {
     /// Start the event loop
     #[instrument(skip_all)]
-    pub async fn event_loop<H: EventHandler + Sync + Send + 'static>(
+    pub async fn event_loop<H>(
         self,
         mut handler: H,
-    ) -> BleHandle {
+    ) -> BleHandle where H: EventHandler + Sync + Send + 'static, {
         tracing::info!(
             "starting event_loop... we have event list to subscribe to: {:?}",
             &self.subscribed_data_event_types

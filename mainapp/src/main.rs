@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::{
     io::{self, Write},
     sync::atomic::{AtomicUsize, Ordering},
@@ -45,14 +44,14 @@ async fn main() -> color_eyre::Result<()> {
         .build()
         .await?;
 
-    let counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let log_file_name = "main_app_output.txt";
     let handler = connected
-        .event_loop(handler::main_handler::BBitHandler::new(Arc::clone(&counter)).await?)
+        .event_loop(handler::main_handler::BBitHandler::new(log_file_name).await?)
         .await;
     tracing::info!("BrainBit is connected, event loop is started");
     handler.start().await;
 
-    get_finish(counter).await?;
+    get_finish(&AtomicUsize::default()).await?;
     handler.stop().await;
 
     tracing::info!("stopped the event loop, finishing");
@@ -60,7 +59,7 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-async fn get_finish(counter: Arc<AtomicUsize>) -> color_eyre::Result<()> {
+async fn get_finish(counter: &AtomicUsize) -> color_eyre::Result<()> {
     let mut buf = String::new();
     let (tx, mut rx) = oneshot::channel();
 
