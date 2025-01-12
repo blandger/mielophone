@@ -1,7 +1,7 @@
 # Mielophone
 Funny research project about BLE device(s) functionality and data gathering.
 
-[![Travis Build Status](https://travis-ci.com/blandger/mielophone.svg?branch=master)](https://travis-ci.com/blandger/mielophone) + ![Actions Build Status](https://github.com/blandger/mielophone/actions/workflows/rust.yml/badge.svg?branch=master)
+![Actions Build Status](https://github.com/blandger/mielophone/actions/workflows/rust.yml/badge.svg?branch=master)
 
 ## Linux
 Usually console app should be run with 'sudo' privileges.
@@ -27,4 +27,3 @@ Unfortunately you have to run it after every app rebuild.
 OR
 
 > sudo apt-get install librust-libdbus-sys-dev
-
