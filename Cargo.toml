@@ -6,6 +6,7 @@ members = [
     "handler",
     "examples/connect",
     "examples/battery_level",
+    "examples/async_trait_update",
 ]
 resolver = "2"
 
@@ -16,19 +17,19 @@ edition = "2021"
 repository = "https://github.com/blandger/mielophone"
 
 [workspace.dependencies]
-btleplug = { version = "0.11.5", features = ["serde"] }
+btleplug = { version = "0.11.7", features = ["serde"] }
 #btleplug = { path = "../btleplug-blandger" }
-tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-async-trait = "0.1.77"
-futures = "0.3.30"
+tokio = { version = "1.42.0", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-uuid = "1.7.0"
-thiserror = "1.0.56"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+async-trait = "0.1.83"
+futures = "0.3.31"
+uuid = "1.11"
+thiserror = "2.0.9"
 
-color-eyre = "0.6.2"
-chrono = "0.4.33"
+color-eyre = "0.6.3"
+chrono = "0.4.39"
 
 #[build]
 #rustflags = ["-C", "link-args=-gz"] #zip debug data

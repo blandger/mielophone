@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::oneshot;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use brainbit::bbit::device::BBitSensor;
@@ -82,7 +82,7 @@ async fn get_finish(counter: &AtomicUsize) -> color_eyre::Result<()> {
         io::stdin().read_line(&mut buf)?;
         let control_letter = buf.trim().to_ascii_lowercase();
         if control_letter == "y" {
-            tracing::debug!("entered letter: {control_letter:?}");
+            debug!("entered letter: {control_letter:?}");
             let _ = tx.send(());
             task.await?;
             return Ok(());

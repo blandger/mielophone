@@ -7,7 +7,7 @@ use std::{
 
 use async_trait::async_trait;
 use tokio::sync::oneshot;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use brainbit::bbit::device::BBitSensor;
@@ -62,7 +62,7 @@ impl Handler {
 impl EventHandler for Handler {
     #[instrument(skip(self))]
     async fn device_status_update(&self, status_data: DeviceStatusData) {
-        tracing::debug!("received Status: {status_data}");
+        debug!("received Status: {status_data}");
         COUNTER.fetch_add(1, Ordering::SeqCst);
     }
 }

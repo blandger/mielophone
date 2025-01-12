@@ -8,7 +8,7 @@ use btleplug::{
 };
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::instrument;
+use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
@@ -81,7 +81,7 @@ impl BBitSensor<Bluetooth> {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                 }
                 Ok(_) => {
-                    tracing::debug!("BLE '{device_name}' is connected...");
+                    debug!("BLE '{device_name}' is connected...");
                 }
             }
         }
@@ -163,7 +163,7 @@ impl BBitSensor<Bluetooth> {
     /// Try to connect to a device. Implements the [`crate::BleSensor::connect`] function
     #[instrument(skip(self))]
     async fn try_connect(&mut self, device_name: &str) -> BBitResult<()> {
-        tracing::debug!("trying to connect to '{device_name}'...");
+        debug!("trying to connect to '{device_name}'...");
         let adapters = self
             .ble_manager
             .adapters()
@@ -174,7 +174,7 @@ impl BBitSensor<Bluetooth> {
             return Err(Error::NoBleAdaptor);
         };
 
-        tracing::debug!("Start scanning for 2 sec...");
+        debug!("Start scanning for 2 sec...");
         let mut scan_filter = ScanFilter::default();
         scan_filter.services.push(NSS2_SERVICE_UUID);
         central.start_scan(scan_filter).await?;
@@ -197,10 +197,10 @@ impl BBitSensor<Bluetooth> {
             tracing::warn!("Device '{device_name}' is not found !");
             return Err(Error::NoDevice);
         };
-        tracing::debug!("BLE '{device_name}' is found, try to connect...");
+        debug!("BLE '{device_name}' is found, try to connect...");
 
         device.connect().await?;
-        tracing::debug!("Try to discover...");
+        debug!("Try to discover...");
         device.discover_services().await?;
 
         let controller = ControlPoint::new(device).await?;
@@ -244,11 +244,11 @@ impl BBitSensor<Configure> {
         );
         self.stop_measurement().await?;
         if self.level.eeg_rate {
-            tracing::debug!("Will subscribe to Resist event...");
+            debug!("Will subscribe to Resist event...");
             self.subscribe(EventType::EegOrResistance.into()).await?;
         }
         if self.level.device_status {
-            tracing::debug!("Will subscribe to DeviceStatus event...");
+            debug!("Will subscribe to DeviceStatus event...");
             self.subscribe_device_status_change().await?;
         }
 
@@ -301,7 +301,7 @@ impl BBitSensor<EventLoop> {
             while let Some(data) = notification_stream.next().await {
                 tracing::trace!("loop - received bluetooth data: {:02X?}", data);
                 if *pause_rx.borrow() {
-                    tracing::debug!("loop paused: ignoring data all data");
+                    debug!("loop paused: ignoring data all data");
                     continue;
                 }
                 if data.uuid == NotifyUuid::DeviceStateChange.into() {
@@ -315,7 +315,7 @@ impl BBitSensor<EventLoop> {
                             };
                         }
                         Err(error) => {
-                            tracing::debug!("Error receiving Device Status data: {error:?}");
+                            debug!("Error receiving Device Status data: {error:?}");
                         }
                     }
                 } else if data.uuid == NotifyUuid::EegOrResistanceMeasurementChange.into() {
@@ -343,7 +343,7 @@ impl BBitSensor<EventLoop> {
                 // either BLE messages or commands comes
                 tokio::select! {
                     Some(data) = bt_rx.recv() => {
-                        tracing::debug!("received bt channel message: {:02X?}", data);
+                        debug!("received bt channel message: {:02X?}", data);
                         use BluetoothEvent::*;
                         match data {
                             DeviceStatus(status_data) => handler.device_status_update(status_data).await,
@@ -351,22 +351,22 @@ impl BBitSensor<EventLoop> {
                         }
                     }
                     Some(event) = event_rx.recv() => {
-                        tracing::debug!("received event: {:02x?}", event);
+                        debug!("received event: {:02x?}", event);
                         match event {
                             BleDeviceEvent::Stop => {
                                 let res = event_sensor.stop_measurement().await;
-                                tracing::debug!("Stop Signal?: {res:?}");
+                                debug!("Stop Signal?: {res:?}");
                                 break;
                             },
                             BleDeviceEvent::StartSignal{ret} => {
                                 let res = event_sensor.start_measurement(MeasurementType::Eeg).await;
-                                tracing::debug!("Started Signal Measurement?: {res:?}");
+                                debug!("Started Signal Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
                             BleDeviceEvent::StartResistance{channel_type, ret} => {
                                 let res = event_sensor.start_measurement(
                                     MeasurementType::Resistance(channel_type)).await;
-                                tracing::debug!("Started Resists Measurement?: {res:?}");
+                                debug!("Started Resists Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
                         }
@@ -395,7 +395,7 @@ impl<L: Level + Connected> BBitSensor<L> {
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.subscribe(&characteristic).await?;
-        tracing::debug!("DONE, subscribed to stream of '{:?}' type", notify_stream);
+        debug!("DONE, subscribed to stream of '{:?}' type", notify_stream);
         Ok(())
     }
 
@@ -411,7 +411,7 @@ impl<L: Level + Connected> BBitSensor<L> {
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.unsubscribe(&characteristic).await?;
-        tracing::debug!(
+        debug!(
             "DONE, unsubscribed from stream of '{:?}' type",
             notify_stream
         );
@@ -460,7 +460,7 @@ impl<L: Level + Connected> BBitSensor<L> {
             );
             let _ = self.device_info.set(device_info);
         }
-        tracing::debug!("device info: '{:?}'", self.device_info.get());
+        debug!("device info: '{:?}'", self.device_info.get());
         Ok(self.device_info.get().unwrap().clone())
     }
 
@@ -496,7 +496,7 @@ impl<L: Level + Connected> BBitSensor<L> {
     /// Stop any type of possible measurement
     #[instrument(skip(self))]
     async fn stop_measurement(&self) -> BBitResult<()> {
-        tracing::debug!("Stopping any measurement...");
+        debug!("Stopping any measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
@@ -510,7 +510,7 @@ impl<L: Level + Connected> BBitSensor<L> {
     /// returned data.
     #[instrument(skip(self))]
     async fn start_measurement(&self, measure_type: MeasurementType) -> BBitResult<()> {
-        tracing::debug!("Starting an '{measure_type:?}' measurement...");
+        debug!("Starting an '{measure_type:?}' measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         let command: ControlPointCommand = match measure_type {
@@ -573,7 +573,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         controller
             .send_control_command_enum(&device, command)
             .await?;
-        tracing::debug!("DONE. Started an '{measure_type:?}' measurement");
+        debug!("DONE. Started an '{measure_type:?}' measurement");
         Ok(())
     }
 }

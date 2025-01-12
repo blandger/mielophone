@@ -1,0 +1,17 @@
+[package]
+name = "fix_async_trait"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Connect to BBit device example"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+brainbit = { version = "0.1.0", path = "../../brainbit" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+color-eyre.workspace = true
+chrono.workspace = true

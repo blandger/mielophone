@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use async_trait::async_trait;
 use brainbit::bbit::resist::ResistState;
@@ -39,7 +39,7 @@ impl EventHandler for BBitHandler {
         let formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         // formatted = formatted.replace("\'", "");
         let msg = format!("{formatted:?} - {status_data}\n");
-        tracing::debug!(msg);
+        debug!(msg);
         {
             // write eeg data to file
             let mut lock = self.output.lock().unwrap();
@@ -69,17 +69,17 @@ impl EventHandler for BBitHandler {
         let nss2status = self.device_status.lock().unwrap().status_nss2;
         match nss2status {
             Nss2Status::ResistTransmission => {
-                tracing::debug!(msg);
+                debug!(msg);
                 let skipped_number = self.skipped_resist_records_number.load(Ordering::Relaxed);
                 if skipped_number > 0 {
                     // skip 'SKIP_FIRST_RESIST_RECORDS_NUMBER' records
-                    tracing::debug!("Skipping = {:?} packet", skipped_number);
+                    debug!("Skipping = {:?} packet", skipped_number);
                     self.decrease_skipped_resist_records_number();
                     return;
                 }
                 let gathered_records_number = self.get_resist_measure_records_len();
                 if gathered_records_number >= STORE_RESIST_RECORDS_NUMBER {
-                    tracing::debug!(
+                    debug!(
                         "Gathered = {:?} records for ch='{}'",
                         gathered_records_number,
                         self.current_chanel_number_resist_measure
@@ -89,10 +89,10 @@ impl EventHandler for BBitHandler {
                 }
             }
             Nss2Status::EegTransmission => {
-                tracing::debug!(msg);
+                debug!(msg);
             }
             Nss2Status::Stopped => {
-                tracing::debug!("Stopped device in main");
+                debug!("Stopped device in main");
             }
             _ => {}
         }

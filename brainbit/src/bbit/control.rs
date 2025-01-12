@@ -3,6 +3,7 @@ use crate::bbit::uuids::WRITE_COMMAN_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
+use tracing::debug;
 
 /// Struct that has access to command point.
 #[derive(Debug, PartialEq, Eq)]
@@ -20,7 +21,7 @@ impl ControlPoint {
 
     /// Send command to [`ControlPoint`] waiting for a response from device.
     pub async fn send_command(&self, device: &Peripheral, data: &[u8]) -> BBitResult<()> {
-        tracing::debug!("Send command to sensor: {:02X?}", data);
+        debug!("Send command to sensor: {:02X?}", data);
         self.write(device, data).await?;
         Ok(())
     }
@@ -31,11 +32,11 @@ impl ControlPoint {
         device: &Peripheral,
         command: ControlPointCommand,
     ) -> BBitResult<()> {
-        tracing::debug!("Send control enum command to sensor: {command:?}");
+        debug!("Send control enum command to sensor: {command:?}");
         let command_as_bytes: Vec<u8> =
             <ControlPointCommand as TryInto<Vec<u8>>>::try_into(command).unwrap();
         self.write(device, command_as_bytes.as_slice()).await?;
-        tracing::debug!(
+        debug!(
             "Written control enum command to sensor: {:02X?}",
             command_as_bytes
         );
@@ -44,7 +45,7 @@ impl ControlPoint {
 
     /// Send command to [`ControlPoint`] without a response.
     async fn write(&self, device: &Peripheral, data: &[u8]) -> BBitResult<()> {
-        tracing::debug!("Write data command to sensor: {:02X?}", data);
+        debug!("Write data command to sensor: {:02X?}", data);
         device
             .write(&self.control_point, data, WriteType::WithResponse)
             .await
@@ -165,13 +166,13 @@ mod tests {
         ];
         let command =
             ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)));
-        tracing::debug!("source = {command:?}");
+        debug!("source = {command:?}");
 
         let expected: [u8; 8] = [0x03, 0x91, 0x48, 0x48, 0x48, 0x00, 0x00, 0x00];
-        tracing::debug!("expected = {command:?}");
+        debug!("expected = {command:?}");
         let command_as_bytes: Vec<u8> =
             <ControlPointCommand as TryInto<Vec<u8>>>::try_into(command).unwrap();
-        tracing::debug!("commands as bytes = {:?}", &command_as_bytes);
+        debug!("commands as bytes = {:?}", &command_as_bytes);
 
         assert_eq!(&expected, command_as_bytes.as_slice())
     }
@@ -179,13 +180,13 @@ mod tests {
     #[test]
     fn test_stop_command() {
         let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
-        tracing::debug!("source = {command:?}");
+        debug!("source = {command:?}");
 
         let expected: [u8; 1] = [0x01];
-        tracing::debug!("expected = {command:?}");
+        debug!("expected = {command:?}");
         let command_as_bytes: Vec<u8> =
             <ControlPointCommand as TryInto<Vec<u8>>>::try_into(command).unwrap();
-        tracing::debug!("commands as bytes = {:?}", &command_as_bytes);
+        debug!("commands as bytes = {:?}", &command_as_bytes);
 
         assert_eq!(&expected, command_as_bytes.as_slice())
     }
@@ -197,13 +198,13 @@ mod tests {
             ControlCommandType::StartEegSignal,
             Some(Vec::from(cmd_data)),
         );
-        tracing::debug!("source = {command:?}");
+        debug!("source = {command:?}");
 
         let expected: [u8; 5] = [0x02, 0x00, 0x00, 0x00, 0x00];
-        tracing::debug!("expected = {command:?}");
+        debug!("expected = {command:?}");
         let command_as_bytes: Vec<u8> =
             <ControlPointCommand as TryInto<Vec<u8>>>::try_into(command).unwrap();
-        tracing::debug!("commands as bytes = {:?}", &command_as_bytes);
+        debug!("commands as bytes = {:?}", &command_as_bytes);
 
         assert_eq!(&expected, command_as_bytes.as_slice())
     }
