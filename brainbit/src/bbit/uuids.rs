@@ -26,7 +26,7 @@ pub const DEVICE_STATE_NOTIFY_CHARACTERISTIC_UUID: Uuid =
 /// EEG data for receiving (in NSS2_SERVICE_UUID)
 pub const EEG_DATA_NOTIFY_CHARACTERISTIC_UUID: Uuid = uuid!("6E400004-B534-F393-68A9-E50E24DCCA9E");
 /// Commands data for transmitting (in NSS2_SERVICE_UUID)
-pub const WRITE_COMMAN_UUID: Uuid = uuid!("6E400003-B534-F393-68A9-E50E24DCCA9E");
+pub const WRITE_COMMAND_UUID: Uuid = uuid!("6E400003-B534-F393-68A9-E50E24DCCA9E");
 
 /// Which UUID to send BLE messages to.
 pub enum NotifyUuid {

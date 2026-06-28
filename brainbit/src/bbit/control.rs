@@ -1,5 +1,5 @@
 use crate::bbit::results::BBitResult;
-use crate::bbit::uuids::WRITE_COMMAN_UUID;
+use crate::bbit::uuids::WRITE_COMMAND_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
@@ -14,7 +14,7 @@ pub struct ControlPoint {
 impl ControlPoint {
     /// Create new [`ControlPoint`].
     pub async fn new(device: &Peripheral) -> BBitResult<Self> {
-        let control_point = find_characteristic(device, WRITE_COMMAN_UUID).await?;
+        let control_point = find_characteristic(device, WRITE_COMMAND_UUID).await?;
 
         Ok(Self { control_point })
     }

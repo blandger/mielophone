@@ -299,12 +299,12 @@ impl BBitSensor<EventLoop> {
             let mut notification_stream = device.notifications().await?;
 
             while let Some(data) = notification_stream.next().await {
-                tracing::trace!("loop - received bluetooth data: {:02X?}", data);
+                tracing::trace!("loop - received Bluetooth data: {:02X?}", data);
                 if *pause_rx.borrow() {
                     debug!("loop paused: ignoring data all data");
                     continue;
                 }
-                if data.uuid == NotifyUuid::DeviceStateChange.into() {
+                if data.uuid == Uuid::from(NotifyUuid::DeviceStateChange) {
                     let result = DeviceStatusData::try_from(data.value);
                     tracing::trace!("loop - received DeviceStatusData: {result:?}");
                     match result {
@@ -318,7 +318,7 @@ impl BBitSensor<EventLoop> {
                             debug!("Error receiving Device Status data: {error:?}");
                         }
                     }
-                } else if data.uuid == NotifyUuid::EegOrResistanceMeasurementChange.into() {
+                } else if data.uuid == Uuid::from(NotifyUuid::EegOrResistanceMeasurementChange) {
                     let eeg_or_resist_data = data.value;
                     tracing::trace!(
                         "loop - received eeg-resist_data: {:02X?}",
@@ -391,7 +391,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         let characteristics = device.characteristics();
         let characteristic = characteristics
             .iter()
-            .find(|c| c.uuid == notify_stream.into())
+            .find(|c| c.uuid == Uuid::from(notify_stream))
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.subscribe(&characteristic).await?;
@@ -407,7 +407,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         let characteristics = device.characteristics();
         let characteristic = characteristics
             .iter()
-            .find(|c| c.uuid == notify_stream.into())
+            .find(|c| c.uuid == Uuid::from(notify_stream))
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.unsubscribe(&characteristic).await?;
@@ -434,7 +434,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         let characteristics = device.characteristics();
         let characteristic = characteristics
             .iter()
-            .find(|c| c.uuid == NotifyStream::from(EventType::State).into())
+            .find(|c| c.uuid == Uuid::from(NotifyStream::from(EventType::State)))
             .ok_or(Error::CharacteristicNotFound)?;
 
         device.subscribe(&characteristic).await?;

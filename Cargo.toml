@@ -13,23 +13,25 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["Yuriy Larin <yuriy.larin@gmail.com>"]
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/blandger/mielophone"
 
 [workspace.dependencies]
-btleplug = { version = "0.11.7", features = ["serde"] }
+btleplug = { version = "0.12", features = ["serde"] }
 #btleplug = { path = "../btleplug-blandger" }
-tokio = { version = "1.42.0", features = ["full"] }
-tokio-stream = { version = "0.1.14", features = ["sync"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-async-trait = "0.1.83"
-futures = "0.3.31"
-uuid = "1.11"
-thiserror = "2.0.9"
+tokio = { version = "1.50", features = ["full"] }
+tokio-stream = { version = "0.1.18", features = ["sync"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+async-trait = "0.1.89"
+futures = "0.3.32"
+uuid = "1.23"
+thiserror = "2.0.18"
 
-color-eyre = "0.6.3"
-chrono = "0.4.39"
+color-eyre = "0.6.5"
+chrono = "0.4.44"
 
+[workspace.dev-dependencies]
+tokio-test = "0.4.5"
 #[build]
 #rustflags = ["-C", "link-args=-gz"] #zip debug data
