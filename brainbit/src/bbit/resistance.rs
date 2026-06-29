@@ -17,28 +17,28 @@ pub struct ResistanceConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResistState {
     /// Left occipital region, back of the head
-    pub ch_o1: ResistsMeasureResult,
+    pub ch_o1: ChannelQuality,
     /// Right occipital region, back of the head
-    pub ch_o2: ResistsMeasureResult,
+    pub ch_o2: ChannelQuality,
     /// Left temporal lobe electrode
-    pub ch_t3: ResistsMeasureResult,
+    pub ch_t3: ChannelQuality,
     /// Right temporal lobe electrode
-    pub ch_t4: ResistsMeasureResult,
+    pub ch_t4: ChannelQuality,
 }
 impl Default for ResistState {
     fn default() -> Self {
         ResistState {
-            ch_o1: ResistsMeasureResult::NONE,
-            ch_o2: ResistsMeasureResult::NONE,
-            ch_t3: ResistsMeasureResult::NONE,
-            ch_t4: ResistsMeasureResult::NONE,
+            ch_o1: ChannelQuality::NONE,
+            ch_o2: ChannelQuality::NONE,
+            ch_t3: ChannelQuality::NONE,
+            ch_t4: ChannelQuality::NONE,
         }
     }
 }
 
 /// Result of measurement and computation received data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResistsMeasureResult {
+pub enum ChannelQuality {
     /// Result is not computed yet
     NONE,
     /// Good electrode's to head contact

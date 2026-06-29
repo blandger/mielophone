@@ -11,10 +11,10 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
-use crate::bbit::control::{ControlCommandType, ControlPoint, ControlPointCommand};
-use crate::bbit::internals::{ADS1294ChannelInput, ChannelType, MeasurementType};
-use crate::bbit::responses::{DeviceInfo, DeviceStatusData};
-use crate::bbit::results::BBitResult;
+use crate::bbit::control_point::{ControlCommandType, ControlPoint, ControlPointCommand};
+use crate::bbit::device_mode::{ADS1294ChannelInput, ChannelType, DeviceMode};
+use crate::bbit::responses::DeviceStatusData;
+use crate::bbit::errors::BBitResult;
 use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
 use crate::bbit::traits::EventHandler;
 use crate::bbit::uuids::{
@@ -23,6 +23,7 @@ use crate::bbit::uuids::{
     SERIAL_NUMBER_STRING_UUID,
 };
 use crate::{find_characteristic, Error};
+use crate::bbit::device_info::DeviceInfo;
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
@@ -359,13 +360,13 @@ impl BBitSensor<EventLoop> {
                                 break;
                             },
                             BleDeviceEvent::StartSignal{ret} => {
-                                let res = event_sensor.start_measurement(MeasurementType::Eeg).await;
+                                let res = event_sensor.start_measurement(DeviceMode::Eeg).await;
                                 debug!("Started Signal Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
                             BleDeviceEvent::StartResistance{channel_type, ret} => {
                                 let res = event_sensor.start_measurement(
-                                    MeasurementType::Resistance(channel_type)).await;
+                                    DeviceMode::Resistance(channel_type)).await;
                                 debug!("Started Resists Measurement?: {res:?}");
                                 let _ = ret.send(res);
                             },
@@ -509,12 +510,12 @@ impl<L: Level + Connected> BBitSensor<L> {
     /// We start measurement (resistance OR eeg) by sending command for one EEG channel and collecting
     /// returned data.
     #[instrument(skip(self))]
-    async fn start_measurement(&self, measure_type: MeasurementType) -> BBitResult<()> {
+    async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
         debug!("Starting an '{measure_type:?}' measurement...");
         let controller = self.control_point.as_ref().unwrap();
         let device = self.ble_device.as_ref().unwrap();
         let command: ControlPointCommand = match measure_type {
-            MeasurementType::Resistance(ChannelType::O1) => {
+            DeviceMode::Resistance(ChannelType::O1) => {
                 let cmd_data = [
                     ADS1294ChannelInput::PowerDownGain3.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
@@ -526,7 +527,7 @@ impl<L: Level + Connected> BBitSensor<L> {
                 ];
                 ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
             }
-            MeasurementType::Resistance(ChannelType::T3) => {
+            DeviceMode::Resistance(ChannelType::T3) => {
                 let cmd_data = [
                     ADS1294ChannelInput::PowerUpGain1.into(),
                     ADS1294ChannelInput::PowerDownGain3.into(),
@@ -538,7 +539,7 @@ impl<L: Level + Connected> BBitSensor<L> {
                 ];
                 ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
             }
-            MeasurementType::Resistance(ChannelType::T4) => {
+            DeviceMode::Resistance(ChannelType::T4) => {
                 let cmd_data = [
                     ADS1294ChannelInput::PowerUpGain1.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
@@ -550,7 +551,7 @@ impl<L: Level + Connected> BBitSensor<L> {
                 ];
                 ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
             }
-            MeasurementType::Resistance(ChannelType::O2) => {
+            DeviceMode::Resistance(ChannelType::O2) => {
                 let cmd_data = [
                     ADS1294ChannelInput::PowerUpGain1.into(),
                     ADS1294ChannelInput::PowerUpGain1.into(),
@@ -562,7 +563,7 @@ impl<L: Level + Connected> BBitSensor<L> {
                 ];
                 ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
             }
-            MeasurementType::Eeg => {
+            DeviceMode::Eeg => {
                 let cmd_data = [ADS1294ChannelInput::PowerDownGain6.into(), 0x00, 0x00, 0x0];
                 ControlPointCommand::new(
                     ControlCommandType::StartEegSignal,

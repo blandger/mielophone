@@ -1,4 +1,4 @@
-use crate::bbit::results::BBitResult;
+use crate::bbit::errors::BBitResult;
 use crate::bbit::uuids::WRITE_COMMAND_UUID;
 use crate::{find_characteristic, Error};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
@@ -79,8 +79,8 @@ pub struct ControlPointCommand {
 impl ControlPointCommand {
     pub fn new(cmd_type: ControlCommandType, data: Option<Vec<u8>>) -> Self {
         Self {
-            cmd_type: cmd_type,
-            data: data,
+            cmd_type,
+            data,
         }
     }
 }
@@ -151,7 +151,7 @@ impl TryFrom<&[u8]> for ControlPointCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bbit::internals::ADS1294ChannelInput;
+    use crate::bbit::device_mode::ADS1294ChannelInput;
 
     #[test]
     fn test_resist_command_layout() {

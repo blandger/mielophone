@@ -1,9 +1,9 @@
 use crate::bbit::errors::Error;
-use crate::bbit::results::BBitResult;
+use crate::bbit::errors::BBitResult;
 
 /// List of measurement types you can request.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum MeasurementType {
+pub enum DeviceMode {
     /// Resistance
     Resistance(ChannelType),
     /// EEG
