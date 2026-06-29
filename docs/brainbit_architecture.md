@@ -19,13 +19,13 @@ flowchart TB
 
     subgraph L3["Layer 3 — Device core (state machine)"]
         direction TB
-        subgraph L3A[" "]
+        subgraph L3A["--"]
             direction LR
             S1["ConnectionState<br/>connect / disconnect / reconnect"]
             S2["MeasurementMode<br/>EEG ↔ Resistance scan"]
             S3["ChannelQuality<br/>good / bad per channel"]
         end
-        subgraph L3B[" "]
+        subgraph L3B["----"]
             direction LR
             SCH["ResistanceScheduler<br/>timer-driven, config-based"]
             REC["ReconnectPolicy<br/>backoff, retry attempts"]
@@ -68,7 +68,11 @@ flowchart TB
 ## Layer responsibilities
 
 - **BLE transport** — thin wrapper over `btleplug::Peripheral`: scanning, connect/disconnect, notify subscriptions, writing commands. No business logic; surfaces raw connection drop events.
+
 - **Device protocol** — pure `&[u8] -> DomainType` functions, no `async`, no state. Easy to unit-test against fixtures without any BLE involved.
+
 - **Device core** — the state machine: connection state, EEG ↔ resistance-scan mode switching (driven internally by a timer/config), per-channel quality tracking, reconnect policy.
+
 - **Public API** — the `EventHandler` trait (via `async_trait`) is the single point of outward-facing events: EEG data, channel quality, battery level, connection state changes.
+
 - **Consumer side** — anything implementing `EventHandler`: a `Recorder`/`Streamer` pushing frames to disk or RTMP, or the actual application with visualization and UI logic.

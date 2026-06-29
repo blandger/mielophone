@@ -6,7 +6,6 @@ members = [
     "handler",
     "examples/connect",
     "examples/battery_level",
-    "examples/async_trait_update",
 ]
 resolver = "2"
 
@@ -31,7 +30,6 @@ thiserror = "2.0.18"
 color-eyre = "0.6.5"
 chrono = "0.4.44"
 
-[workspace.dev-dependencies]
 tokio-test = "0.4.5"
 #[build]
 #rustflags = ["-C", "link-args=-gz"] #zip debug data

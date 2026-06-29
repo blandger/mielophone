@@ -1,3 +1,17 @@
+use std::time::Duration;
+
+#[derive(Debug, Clone)]
+pub struct ResistanceConfig {
+    /// How many packets to accumulate per channel before averaging
+    pub packets_per_channel: u32,
+    /// Resistance threshold below which the channel is considered “good” or "bad"
+    pub good_threshold_ohm: f32,
+    /// Should I do a resistance scan automatically at the beginning of a session?
+    pub run_resistance_measure_at_session_start: bool,
+    /// Do periodic resistance check period during operation (None = do not do)
+    pub resistance_check_interval: Option<Duration>,
+}
+
 /// Structure for storing result of resistance measurement on every electrode
 /// Data is computed and quality of electrode's contact
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

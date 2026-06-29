@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use tracing::{debug, instrument};
 
 use async_trait::async_trait;
-use brainbit::bbit::resist::ResistState;
+use brainbit::bbit::resistance::ResistState;
 use brainbit::bbit::responses::{DeviceStatusData, Nss2Status};
 use brainbit::bbit::traits::EventHandler;
 
