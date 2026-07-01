@@ -7,7 +7,7 @@ use std::{
 
 use async_trait::async_trait;
 use tokio::sync::oneshot;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use brainbit::bbit::device::BBitSensor;
@@ -26,28 +26,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
-    let connected = BBitSensor::new()
-        .await?
-        .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
-        .await?
-        .listen(EventType::State) // subscribe to device status changes
-        // .listen(EventType::Resistance)
-        .build()
-        .await?
-        .event_loop(Handler::new().await?)
-        .await;
+    let mut sensor = BBitSensor::new(PERIPHERAL_NAME_MATCH_FILTER.to_string())
+        .await
+        .expect("Invalid BBit name");
+
+    debug!("Attempting connection");
+    while !sensor.is_connected().await {
+        match sensor.connect().await {
+            Err(brainbit::bbit::errors::Error::NoBleAdaptor) => {
+                error!("No Bluetooth adapter found");
+                return Ok(());
+            }
+            Err(why) => error!("Could not connect: {:?}", why),
+            _ => {}
+        }
+    }
+    debug!("Connected");
+
+    sensor
+        .event_handler(Handler::new().await?);
     tracing::info!("BrainBit is connected, event loop is started");
     // connected.start();
 
     get_finish().await?;
-    connected.stop().await;
+    // sensor.stop().await;
 
     tracing::info!("stopped the event loop, finishing");
 
     Ok(())
 }
-
-static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 struct Handler {}
@@ -57,6 +64,8 @@ impl Handler {
         Ok(Self {})
     }
 }
+
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[async_trait]
 impl EventHandler for Handler {

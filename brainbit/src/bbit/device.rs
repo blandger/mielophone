@@ -1,10 +1,9 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
-    platform::{Manager, Peripheral},
+    platform::{Adapter, Manager, Peripheral},
 };
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, oneshot, watch};
@@ -15,15 +14,12 @@ use crate::bbit::control_point::{ControlCommandType, ControlPoint, ControlPointC
 use crate::bbit::device_mode::{ADS1294ChannelInput, ChannelType, DeviceMode};
 use crate::bbit::responses::DeviceStatusData;
 use crate::bbit::errors::BBitResult;
-use crate::bbit::sealed::{Bluetooth, Configure, Connected, EventLoop, Level};
+use crate::bbit::sealed::{Configure, EventLoop};
 use crate::bbit::traits::EventHandler;
-use crate::bbit::uuids::{
-    EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID,
-    HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID,
-    SERIAL_NUMBER_STRING_UUID,
-};
+use crate::bbit::uuids::{EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID, HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID, PERIPHERAL_NAME_MATCH_FILTER, SERIAL_NUMBER_STRING_UUID};
 use crate::{find_characteristic, Error};
 use crate::bbit::device_info::DeviceInfo;
+use tokio::time::{self, Duration};
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
@@ -33,126 +29,128 @@ pub struct CommandData {
 }
 
 /// The core sensor manager
-pub struct BBitSensor<L: Level> {
+pub struct BBitSensor {
+    /// The device id or name in the device (e.g, "BrainBit")
+    device_id: String,
     /// BLE connection manager
     ble_manager: Manager,
     /// Connected and controlled device
     ble_device: Option<Peripheral>,
-    /// BLE event types subscribed and processed
-    pub subscribed_data_event_types: Vec<EventType>,
+    /// Handler for event callbacks
+    event_handler: Option<Arc<dyn EventHandler>>,
+    /// BLE event type currently subscribed and processed
+    pub data_type: Vec<EventType>,
     /// Device manage and send commands
     pub control_point: Option<ControlPoint>,
-    pub level: L,
     /// Common device information like model, serial numbers, HW, SW revisions
     pub device_info: OnceLock<DeviceInfo>,
 }
 
-impl BBitSensor<Bluetooth> {
+impl BBitSensor {
     /// Construct a BleSensor
-    pub async fn new() -> BBitResult<Self> {
+    ///
+    /// Returns a [`Error::BleError`] if the Bluetooth manager could not be created
+    pub async fn new(device_id: String) -> BBitResult<Self> {
+        if device_id.len() != 8 {
+            return Err(Error::InvalidData("BrainBit device name is missing".to_string()));
+        }
+        let ble_manager = Manager::new().await.map_err(Error::BleError)?;
         Ok(Self {
-            ble_manager: Manager::new().await?,
+            device_id,
+            ble_manager,
             ble_device: None,
-            subscribed_data_event_types: vec![],
+            event_handler: None,
+            data_type: vec![],
             control_point: None,
-            level: Bluetooth,
             device_info: OnceLock::new(),
         })
     }
 
-    /// Connect to a device. Blocks until a connection is found
+    /// Tries find and connect to the device instance by using id associated with this device.
+    ///
     #[instrument(skip(self))]
-    pub async fn block_connect(mut self, device_name: &str) -> BBitResult<BBitSensor<Configure>> {
-        let mut error_on_connect_max_attempts_count = 20; // error attempts
+    pub async fn connect(&mut self) -> BBitResult<()> {
+        debug!("trying to connect to '{:?}'...", &self.device_id);
+        let adapters_result = self.ble_manager.adapters().await.map_err(Error::BleError);
 
-        while !self.is_connected().await {
-            // try to do specified connect attempts
-            match self.try_connect(device_name).await {
-                Err(e @ Error::NoBleAdaptor) => {
-                    tracing::error!("No bluetooth adaptors found");
-                    return Err(e);
-                }
-                Err(e) => {
-                    error_on_connect_max_attempts_count -= 1;
-                    tracing::warn!("Could not connect to '{device_name}' on attempt = '{error_on_connect_max_attempts_count}', error: {}", e);
-                    if error_on_connect_max_attempts_count <= 0 {
-                        tracing::error!("Stopped connecting attempts after limit !");
-                        return Err(e);
-                    }
-                    tokio::time::sleep(Duration::from_secs(2)).await;
-                }
-                Ok(_) => {
-                    debug!("BLE '{device_name}' is connected...");
-                }
+        if let Ok(adapters) = adapters_result {
+            if adapters.is_empty() {
+                tracing::error!("No ble adaptor found");
+                return Err(Error::NoBleAdaptor);
             }
+
+            let central = adapters.into_iter().next().expect("No adaptor found, crash");
+            debug!("Start scanning for 2 sec...");
+            let mut scan_filter = ScanFilter::default();
+            scan_filter.services.push(NSS2_SERVICE_UUID);
+            central
+                .start_scan(scan_filter)
+                .await
+                .map_err(Error::BleError)?;
+            time::sleep(Duration::from_secs(2)).await;
+
+            self.ble_device = self.find_device(&central).await;
+
+            if let Some(device) = &self.ble_device {
+                debug!("BLE '{}' is found, try to connect...", &self.device_id);
+                device.connect().await.map_err(Error::BleError)?;
+                debug!("Try to discover services...");
+                device.discover_services().await.map_err(Error::BleError)?;
+
+                let controller = ControlPoint::new(device).await?;
+                self.control_point = Some(controller);
+                return Ok(());
+            }
+            return Err(Error::NoDevice);
         }
-
-        let new_self: BBitSensor<Configure> = BBitSensor {
-            ble_manager: self.ble_manager,
-            ble_device: self.ble_device,
-            control_point: self.control_point,
-            subscribed_data_event_types: self.subscribed_data_event_types,
-            level: Configure::default(),
-            device_info: self.device_info,
-        };
-
-        Ok(new_self)
+        tracing::error!("No ble adaptor found, end...");
+        Err(Error::NoBleAdaptor)
     }
 
-    /// Connect to a device, but override the behavior after each attempted connect
-    /// Return [`Ok`] from the closure to continue trying to connect or [`Err`]
-    /// give up and return.
+    /// Subscribes to a notify event on the device. These events will be sent via the [`EventHandler`].
     ///
-    /// ## Examples
+    /// # Errors
     ///
-    /// ```rust,no_run
-    /// # #[tokio::main]
-    /// # async fn main() {
-    /// use brainbit::bbit::device::BBitSensor;
-    /// use brainbit::bbit::errors::Error;
-    ///
-    /// let mut bbit = BBitSensor::new().await.unwrap()
-    ///     // default handling that is applied to BleSensor::block_connect
-    ///     .map_connect("BrainBit", |r| {
-    ///         match r {
-    ///             Err(e @ Error::NoBleAdaptor) => {
-    ///                 tracing::error!("no bluetooth adaptors found");
-    ///                 return Err(e);
-    ///             }
-    ///             Err(e) => tracing::warn!("could not connect: {}", e),
-    ///             Ok(_) => {}
-    ///         };
-    ///         Ok(())
-    ///     }).await.unwrap();
-    /// # }
-    /// ```
-    #[instrument(skip(self, f))]
-    pub async fn map_connect<F>(
-        mut self,
-        device_id: &str,
-        mut f: F,
-    ) -> BBitResult<BBitSensor<Configure>>
-    where
-        F: FnMut(BBitResult<()>) -> BBitResult<()>,
-    {
-        while !self.is_connected().await {
-            if let Err(e) = f(self.try_connect(device_id).await) {
-                return Err(e);
-            }
-        }
-        let new_self: BBitSensor<Configure> = BBitSensor {
-            ble_manager: self.ble_manager,
-            ble_device: self.ble_device,
-            control_point: self.control_point,
-            subscribed_data_event_types: self.subscribed_data_event_types,
-            level: Configure::default(),
-            device_info: self.device_info,
-        };
+    /// Will return:
+    /// - [`Error::NotConnected`] if the device is not currently connected
+    /// - [`Error::CharacteristicNotFound`] if a given notify type is not found on the device
+    /// - [`Error::BleError`] if there is an error subscribing to the event
+    pub async fn subscribe(&self, stream: NotifyStream) -> BBitResult<()> {
+        tracing::info!("subscribing to stream of '{:#?}' type...", stream);
+        let device = self.device().await?;
 
-        Ok(new_self)
+        if let Ok(true) = device.is_connected().await {
+            let characteristic = find_characteristic(device, stream.into()).await?;
+            return device
+                .subscribe(&characteristic)
+                .await
+                .map_err(Error::BleError);
+        }
+        Err(Error::NotConnected)
     }
 
-    async fn is_connected(&self) -> bool {
+    /// Unsubscribes to a notify event on your device.
+    ///
+    /// Will return:
+    /// - [`Error::NotConnected`] if the device isn't connected
+    /// - [`Error::CharacteristicNotFound`] if the specified notify type isn't found on the device
+    /// - [`Error::BleError`] if there is an error subscribing to the event from within BLE
+    pub async fn unsubscribe(&self, stream: NotifyStream) -> BBitResult<()> {
+        tracing::info!("unsubscribing from stream of '{stream:?} type...'");
+        let device = self.device().await?;
+
+        if let Ok(true) = device.is_connected().await {
+            let characteristic = find_characteristic(device, stream.into()).await?;
+
+            return device
+                .unsubscribe(&characteristic)
+                .await
+                .map_err(Error::BleError);
+        }
+        Err(Error::NotConnected)
+    }
+
+    pub async fn is_connected(&self) -> bool {
         if let Some(device) = &self.ble_device {
             if let Ok(v) = device.is_connected().await {
                 return v;
@@ -161,62 +159,214 @@ impl BBitSensor<Bluetooth> {
         false
     }
 
-    /// Try to connect to a device. Implements the [`crate::BleSensor::connect`] function
-    #[instrument(skip(self))]
-    async fn try_connect(&mut self, device_name: &str) -> BBitResult<()> {
-        debug!("trying to connect to '{device_name}'...");
-        let adapters = self
-            .ble_manager
-            .adapters()
+    async fn controller(&self) -> BBitResult<&ControlPoint> {
+        if let Some(controller) = &self.control_point {
+            return Ok(controller);
+        }
+        Err(Error::NoControlPointAssigned)
+    }
+
+    /// Start measurement while event loop is running
+    /*pub async fn start(&self, ty: H10MeasurementType) -> BBitResult<ControlResponse> {
+        self.get_pmd_response(ControlPointCommand::RequestMeasurementStart, ty)
             .await
-            .map_err(|_| Error::NoBleAdaptor)?;
-        let Some(central) = adapters.first() else {
-            tracing::error!("No ble adaptor found");
-            return Err(Error::NoBleAdaptor);
-        };
+    }*/
 
-        debug!("Start scanning for 2 sec...");
-        let mut scan_filter = ScanFilter::default();
-        scan_filter.services.push(NSS2_SERVICE_UUID);
-        central.start_scan(scan_filter).await?;
-        tokio::time::sleep(Duration::from_secs(2)).await;
+    /// Stop measurement while event loop is running
+    /*pub async fn stop(&self, ty: H10MeasurementType) -> BBitResult<ControlResponse> {
+        self.get_pmd_response(ControlPointCommand::StopMeasurement, ty)
+            .await
+    }*/
 
-        for p in central.peripherals().await? {
+    async fn find_device(&self, central: &Adapter) -> Option<Peripheral> {
+        for p in central.peripherals().await.unwrap() {
             if p.properties()
-                .await?
+                .await
+                .unwrap()
                 .unwrap()
                 .local_name
                 .iter()
-                .any(|name| name.starts_with(device_name))
+                .any(|name| name.starts_with(PERIPHERAL_NAME_MATCH_FILTER) && name.ends_with(&self.device_id))
             {
-                self.ble_device = Some(p);
-                break;
+                return Some(p);
             }
         }
+        None
+    }
 
-        let Some(device) = &self.ble_device else {
-            tracing::warn!("Device '{device_name}' is not found !");
-            return Err(Error::NoDevice);
+    async fn device(&self) -> BBitResult<&Peripheral> {
+        if let Some(device) = &self.ble_device {
+            return Ok(device);
+        }
+        Err(Error::NoDevice)
+    }
+
+    async fn read(&self, uuid: Uuid) -> BBitResult<Vec<u8>> {
+        let device = self.device().await?;
+        if let Ok(char) = find_characteristic(device, uuid).await {
+            return device.read(&char).await.map_err(Error::BleError);
+        }
+        Err(Error::CharacteristicNotFound)
+    }
+
+    async fn read_string(&self, uuid: Uuid) -> BBitResult<String> {
+        let data = self.read(uuid).await?;
+        let string = String::from_utf8_lossy(&data).into_owned();
+        Ok(string.trim_matches(char::from(0)).to_string())
+    }
+
+    /// Sets an event handler with multiple methods for each possible event.
+    pub fn event_handler<H: EventHandler + 'static>(&mut self, event_handler: H) {
+        self.event_handler = Some(Arc::new(event_handler));
+    }
+
+    /// Send command as enum to [`ControlPoint`].
+    #[instrument(skip(self))]
+    pub async fn send_command(&self, command: ControlPointCommand) -> BBitResult<()> {
+        let control_point = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        control_point
+            .send_control_command_enum(device, command)
+            .await?;
+        Ok(())
+    }
+
+    /// Stop any type of possible measurement
+    #[instrument(skip(self))]
+    async fn stop_measurement(&self) -> BBitResult<()> {
+        debug!("Stopping any measurement...");
+        let controller = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
+        controller
+            .send_control_command_enum(&device, command)
+            .await?;
+        Ok(())
+    }
+
+    /// We start measurement (resistance OR eeg) by sending command for one EEG channel and collecting
+    /// returned data.
+    #[instrument(skip(self))]
+    async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
+        debug!("Starting an '{measure_type:?}' measurement...");
+        let controller = self.control_point.as_ref().unwrap();
+        let device = self.ble_device.as_ref().unwrap();
+        let command: ControlPointCommand = match measure_type {
+            DeviceMode::Resistance(ChannelType::O1) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0b00000001,
+                    0x01,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            DeviceMode::Resistance(ChannelType::T3) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0b00000010,
+                    0x03,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            DeviceMode::Resistance(ChannelType::T4) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    0b00000100,
+                    0x05,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            DeviceMode::Resistance(ChannelType::O2) => {
+                let cmd_data = [
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerUpGain1.into(),
+                    ADS1294ChannelInput::PowerDownGain3.into(),
+                    0b0001000,
+                    0b0001000,
+                    0x0,
+                ];
+                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
+            }
+            DeviceMode::Eeg => {
+                let cmd_data = [ADS1294ChannelInput::PowerDownGain6.into(), 0x00, 0x00, 0x0];
+                ControlPointCommand::new(
+                    ControlCommandType::StartEegSignal,
+                    Some(Vec::from(cmd_data)),
+                )
+            }
         };
-        debug!("BLE '{device_name}' is found, try to connect...");
+        controller
+            .send_control_command_enum(&device, command)
+            .await?;
+        debug!("DONE. Started an '{measure_type:?}' measurement");
+        Ok(())
+    }
 
-        device.connect().await?;
-        debug!("Try to discover...");
-        device.discover_services().await?;
+    /// Read the battery level of the device
+    #[instrument(skip_all)]
+    pub async fn subscribe_device_status_change(&self) -> BBitResult<()> {
+        tracing::info!("Subscribe device status changes, including cmd error, battery level");
+        let device = self.ble_device.as_ref().unwrap();
 
-        let controller = ControlPoint::new(device).await?;
-        self.control_point = Some(controller);
+        let characteristics = device.characteristics();
+        let characteristic = characteristics
+            .iter()
+            .find(|c| c.uuid == Uuid::from(NotifyStream::from(EventType::State)))
+            .ok_or(Error::CharacteristicNotFound)?;
+
+        device.subscribe(&characteristic).await?;
 
         Ok(())
+    }
+
+    /// Read the internal device info - model, serial, SW, HW revision
+    #[instrument(skip(self))]
+    pub async fn device_info(&self) -> BBitResult<DeviceInfo> {
+        tracing::info!("fetching device info...");
+        // on time initialization
+        if self.device_info.get().is_none() {
+            let model_number = self.read_string(MODEL_NUMBER_STRING_UUID).await?;
+            let serial_number = self.read_string(SERIAL_NUMBER_STRING_UUID).await?;
+            let hardware_revision = self.read_string(HARDWARE_REVISION_STRING_UUID).await?;
+            let firmware_revision = self.read_string(FIRMWARE_REVISION_STRING_UUID).await?;
+            let device_info = DeviceInfo::new(
+                model_number,
+                serial_number,
+                hardware_revision,
+                firmware_revision,
+            );
+            let _ = self.device_info.set(device_info);
+        }
+        debug!("device info: '{:?}'", self.device_info.get());
+        Ok(self.device_info.get().unwrap().clone())
+    }
+
+    /// Fetch all characteristics of the device
+    pub fn characteristics(&self) -> BBitResult<BTreeSet<Characteristic>> {
+        let device = self.ble_device.as_ref().unwrap();
+        Ok(device.characteristics())
     }
 }
 
 /// Assign configurable parameters for BBit device
-impl BBitSensor<Configure> {
+/*impl BBitSensor<Configure> {
     /// Add a data type to listen to
     #[instrument(skip(self))]
     pub fn listen(mut self, event_type: EventType) -> Self {
-        if self.subscribed_data_event_types.contains(&event_type) {
+        if self.data_type.contains(&event_type) {
             return self;
         }
         tracing::info!("'{event_type:?}' added to subscribed_data_event_types field");
@@ -233,7 +383,7 @@ impl BBitSensor<Configure> {
             }
         }
 
-        self.subscribed_data_event_types.push(event_type);
+        self.data_type.push(event_type);
         self
     }
 
@@ -257,14 +407,13 @@ impl BBitSensor<Configure> {
             ble_manager: self.ble_manager,
             ble_device: self.ble_device,
             control_point: self.control_point,
-            subscribed_data_event_types: self.subscribed_data_event_types,
-            level: EventLoop,
+            data_type: self.data_type,
             device_info: self.device_info,
         })
     }
-}
+}*/
 
-impl BBitSensor<EventLoop> {
+/*impl BBitSensor<EventLoop> {
     /// Start the event loop
     #[instrument(skip_all)]
     pub async fn event_loop<H>(
@@ -273,11 +422,11 @@ impl BBitSensor<EventLoop> {
     ) -> BleHandle where H: EventHandler + Sync + Send + 'static, {
         tracing::info!(
             "starting event_loop... we have event list to subscribe to: {:?}",
-            &self.subscribed_data_event_types
+            &self.data_type
         );
 
         // look for subscribed events
-        for event_type in &self.subscribed_data_event_types {
+        for event_type in &self.data_type {
             use EventType::*;
             if let State = event_type {
                 let _ = self.subscribe_device_status_change().await;
@@ -381,9 +530,9 @@ impl BBitSensor<EventLoop> {
 
         BleHandle::new(event_tx, pause_tx)
     }
-}
+}*/
 
-impl<L: Level + Connected> BBitSensor<L> {
+/*impl<L: Level + Connected> BBitSensor<L> {
     #[instrument(skip(self))]
     async fn subscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
         tracing::info!("subscribing to stream of '{:#?}' type...", notify_stream);
@@ -426,52 +575,6 @@ impl<L: Level + Connected> BBitSensor<L> {
         device.characteristics()
     }
 
-    /// Read the battery level of the device
-    #[instrument(skip_all)]
-    pub async fn subscribe_device_status_change(&self) -> BBitResult<()> {
-        tracing::info!("Subscribe device status changes, including cmd error, battery level");
-        let device = self.ble_device.as_ref().unwrap();
-
-        let characteristics = device.characteristics();
-        let characteristic = characteristics
-            .iter()
-            .find(|c| c.uuid == Uuid::from(NotifyStream::from(EventType::State)))
-            .ok_or(Error::CharacteristicNotFound)?;
-
-        device.subscribe(&characteristic).await?;
-
-        Ok(())
-    }
-
-    /// Read the internal device info - model, serial, SW, HW revision
-    #[instrument(skip(self))]
-    pub async fn device_info(&self) -> BBitResult<DeviceInfo> {
-        tracing::info!("fetching device info...");
-        // on time initialization
-        if self.device_info.get().is_none() {
-            let model_number = self.read_string(MODEL_NUMBER_STRING_UUID).await?;
-            let serial_number = self.read_string(SERIAL_NUMBER_STRING_UUID).await?;
-            let hardware_revision = self.read_string(HARDWARE_REVISION_STRING_UUID).await?;
-            let firmware_revision = self.read_string(FIRMWARE_REVISION_STRING_UUID).await?;
-            let device_info = DeviceInfo::new(
-                model_number,
-                serial_number,
-                hardware_revision,
-                firmware_revision,
-            );
-            let _ = self.device_info.set(device_info);
-        }
-        debug!("device info: '{:?}'", self.device_info.get());
-        Ok(self.device_info.get().unwrap().clone())
-    }
-
-    /// low level reading bytes as String
-    async fn read_string(&self, uuid: Uuid) -> BBitResult<String> {
-        let data = self.read(uuid).await?;
-
-        let string = String::from_utf8_lossy(&data).into_owned();
-        Ok(string.trim_matches(char::from(0)).to_string())
-    }
 
     async fn read(&self, uuid: Uuid) -> BBitResult<Vec<u8>> {
         let device = self.ble_device.as_ref().unwrap();
@@ -482,102 +585,7 @@ impl<L: Level + Connected> BBitSensor<L> {
         Err(Error::CharacteristicNotFound)
     }
 
-    /// Send command as enum to [`ControlPoint`].
-    #[instrument(skip(self))]
-    pub async fn send_command(&self, command: ControlPointCommand) -> BBitResult<()> {
-        let control_point = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
-
-        control_point
-            .send_control_command_enum(device, command)
-            .await?;
-        Ok(())
-    }
-
-    /// Stop any type of possible measurement
-    #[instrument(skip(self))]
-    async fn stop_measurement(&self) -> BBitResult<()> {
-        debug!("Stopping any measurement...");
-        let controller = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
-        let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
-        controller
-            .send_control_command_enum(&device, command)
-            .await?;
-        Ok(())
-    }
-
-    /// We start measurement (resistance OR eeg) by sending command for one EEG channel and collecting
-    /// returned data.
-    #[instrument(skip(self))]
-    async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
-        debug!("Starting an '{measure_type:?}' measurement...");
-        let controller = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
-        let command: ControlPointCommand = match measure_type {
-            DeviceMode::Resistance(ChannelType::O1) => {
-                let cmd_data = [
-                    ADS1294ChannelInput::PowerDownGain3.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    0b00000001,
-                    0x01,
-                    0x0,
-                ];
-                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
-            }
-            DeviceMode::Resistance(ChannelType::T3) => {
-                let cmd_data = [
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerDownGain3.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    0b00000010,
-                    0x03,
-                    0x0,
-                ];
-                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
-            }
-            DeviceMode::Resistance(ChannelType::T4) => {
-                let cmd_data = [
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerDownGain3.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    0b00000100,
-                    0x05,
-                    0x0,
-                ];
-                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
-            }
-            DeviceMode::Resistance(ChannelType::O2) => {
-                let cmd_data = [
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerUpGain1.into(),
-                    ADS1294ChannelInput::PowerDownGain3.into(),
-                    0b0001000,
-                    0b0001000,
-                    0x0,
-                ];
-                ControlPointCommand::new(ControlCommandType::StartResist, Some(Vec::from(cmd_data)))
-            }
-            DeviceMode::Eeg => {
-                let cmd_data = [ADS1294ChannelInput::PowerDownGain6.into(), 0x00, 0x00, 0x0];
-                ControlPointCommand::new(
-                    ControlCommandType::StartEegSignal,
-                    Some(Vec::from(cmd_data)),
-                )
-            }
-        };
-        controller
-            .send_control_command_enum(&device, command)
-            .await?;
-        debug!("DONE. Started an '{measure_type:?}' measurement");
-        Ok(())
-    }
-}
+}*/
 
 /// Handle to the [`BBitSensor`] that is running an event loop
 #[derive(Clone)]

@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::oneshot;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use brainbit::bbit::device::BBitSensor;
@@ -35,24 +35,37 @@ async fn main() -> color_eyre::Result<()> {
         )
         .init();
 
-    let connected = BBitSensor::new()
-        .await?
-        .block_connect(PERIPHERAL_NAME_MATCH_FILTER)
-        .await?
+    let mut sensor = BBitSensor::new(PERIPHERAL_NAME_MATCH_FILTER.to_string())
+        .await
+        .expect("Invalid BBit name");
+
+    debug!("Attempting connection");
+    while !sensor.is_connected().await {
+        match sensor.connect().await {
+            Err(brainbit::bbit::errors::Error::NoBleAdaptor) => {
+                error!("No Bluetooth adapter found");
+                return Ok(());
+            }
+            Err(why) => error!("Could not connect: {:?}", why),
+            _ => {}
+        }
+    }
+    debug!("Connected");
+
+    /*sensor
         .listen(EventType::State)
         .listen(EventType::EegOrResistance)
         .build()
-        .await?;
+        .await?;*/
 
     let log_file_name = "main_app_output.txt";
-    let handler = connected
-        .event_loop(handler::main_handler::BBitHandler::new(log_file_name).await?)
-        .await;
+    let handler = sensor
+        .event_handler(handler::main_handler::BBitHandler::new(log_file_name).await?);
     tracing::info!("BrainBit is connected, event loop is started");
-    handler.start().await;
+    // handler.start().await;
 
     get_finish(&AtomicUsize::default()).await?;
-    handler.stop().await;
+    // handler.stop().await;
 
     tracing::info!("stopped the event loop, finishing");
 
