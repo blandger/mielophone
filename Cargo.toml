@@ -28,7 +28,7 @@ uuid = "1.23"
 thiserror = "2.0.18"
 
 color-eyre = "0.6.5"
-chrono = "0.4.44"
+chrono = "0.4"
 
 tokio-test = "0.4.5"
 #[build]

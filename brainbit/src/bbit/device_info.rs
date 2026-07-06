@@ -1,9 +1,3 @@
-/// Structure to contain HR data and RR interval.
-// #[derive(Debug, Clone)]
-// pub struct EggData {
-//     data: Vec<u16>,
-// }
-
 /// Contains common information about device like:
 /// model, serial number, HW, SW revision
 #[derive(Debug, Clone, PartialEq, Eq)]

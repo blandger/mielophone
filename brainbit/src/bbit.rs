@@ -4,7 +4,6 @@ pub mod errors;
 pub(crate) mod device_mode;
 pub mod resistance;
 pub mod responses;
-pub(crate) mod sealed;
 pub mod traits;
 pub mod uuids;
 mod device_info;

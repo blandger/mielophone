@@ -14,7 +14,6 @@ use crate::bbit::control_point::{ControlCommandType, ControlPoint, ControlPointC
 use crate::bbit::device_mode::{ADS1294ChannelInput, ChannelType, DeviceMode};
 use crate::bbit::responses::DeviceStatusData;
 use crate::bbit::errors::BBitResult;
-use crate::bbit::sealed::{Configure, EventLoop};
 use crate::bbit::traits::EventHandler;
 use crate::bbit::uuids::{EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID, HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID, PERIPHERAL_NAME_MATCH_FILTER, SERIAL_NUMBER_STRING_UUID};
 use crate::{find_characteristic, Error};
@@ -64,6 +63,22 @@ impl BBitSensor {
             control_point: None,
             device_info: OnceLock::new(),
         })
+    }
+
+    async fn find_device(&self, central: &Adapter) -> Option<Peripheral> {
+        for p in central.peripherals().await.unwrap() {
+            if p.properties()
+                .await
+                .unwrap()
+                .unwrap()
+                .local_name
+                .iter()
+                .any(|name| name.starts_with(PERIPHERAL_NAME_MATCH_FILTER) && name.ends_with(&self.device_id))
+            {
+                return Some(p);
+            }
+        }
+        None
     }
 
     /// Tries find and connect to the device instance by using id associated with this device.
@@ -178,21 +193,6 @@ impl BBitSensor {
             .await
     }*/
 
-    async fn find_device(&self, central: &Adapter) -> Option<Peripheral> {
-        for p in central.peripherals().await.unwrap() {
-            if p.properties()
-                .await
-                .unwrap()
-                .unwrap()
-                .local_name
-                .iter()
-                .any(|name| name.starts_with(PERIPHERAL_NAME_MATCH_FILTER) && name.ends_with(&self.device_id))
-            {
-                return Some(p);
-            }
-        }
-        None
-    }
 
     async fn device(&self) -> BBitResult<&Peripheral> {
         if let Some(device) = &self.ble_device {
@@ -223,9 +223,9 @@ impl BBitSensor {
     /// Send command as enum to [`ControlPoint`].
     #[instrument(skip(self))]
     pub async fn send_command(&self, command: ControlPointCommand) -> BBitResult<()> {
-        let control_point = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
-        control_point
+        let controller = self.controller().await?;
+        let device = self.device().await?;
+        controller
             .send_control_command_enum(device, command)
             .await?;
         Ok(())
@@ -235,8 +235,8 @@ impl BBitSensor {
     #[instrument(skip(self))]
     async fn stop_measurement(&self) -> BBitResult<()> {
         debug!("Stopping any measurement...");
-        let controller = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
+        let controller = self.controller().await?;
+        let device = self.device().await?;
         let command = ControlPointCommand::new(ControlCommandType::StopAll, None);
         controller
             .send_control_command_enum(&device, command)
@@ -249,8 +249,8 @@ impl BBitSensor {
     #[instrument(skip(self))]
     async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
         debug!("Starting an '{measure_type:?}' measurement...");
-        let controller = self.control_point.as_ref().unwrap();
-        let device = self.ble_device.as_ref().unwrap();
+        let controller = self.controller().await?;
+        let device = self.device().await?;
         let command: ControlPointCommand = match measure_type {
             DeviceMode::Resistance(ChannelType::O1) => {
                 let cmd_data = [
@@ -319,7 +319,7 @@ impl BBitSensor {
     #[instrument(skip_all)]
     pub async fn subscribe_device_status_change(&self) -> BBitResult<()> {
         tracing::info!("Subscribe device status changes, including cmd error, battery level");
-        let device = self.ble_device.as_ref().unwrap();
+        let device = self.device().await?;
 
         let characteristics = device.characteristics();
         let characteristic = characteristics
@@ -351,7 +351,7 @@ impl BBitSensor {
             let _ = self.device_info.set(device_info);
         }
         debug!("device info: '{:?}'", self.device_info.get());
-        Ok(self.device_info.get().unwrap().clone())
+        Ok(self.device_info.get().expect("DeviceInfo is not initialized?").clone())
     }
 
     /// Fetch all characteristics of the device
@@ -590,12 +590,12 @@ impl BBitSensor {
 /// Handle to the [`BBitSensor`] that is running an event loop
 #[derive(Clone)]
 pub struct BleHandle {
-    sender: mpsc::Sender<BleDeviceEvent>,
+    sender: mpsc::Sender<BleDeviceEventType>,
     pause: Arc<watch::Sender<bool>>,
 }
 
 impl BleHandle {
-    fn new(sender: mpsc::Sender<BleDeviceEvent>, pause: watch::Sender<bool>) -> Self {
+    fn new(sender: mpsc::Sender<BleDeviceEventType>, pause: watch::Sender<bool>) -> Self {
         Self {
             sender,
             pause: Arc::new(pause),
@@ -606,7 +606,7 @@ impl BleHandle {
     #[instrument(skip(self))]
     pub async fn stop(self) {
         tracing::info!("stopping bbit sensor");
-        let _ = self.sender.send(BleDeviceEvent::Stop).await;
+        let _ = self.sender.send(BleDeviceEventType::Stop).await;
     }
 
     /// Start Signal or Resistance measurement
@@ -617,7 +617,7 @@ impl BleHandle {
         let channel_type = ChannelType::O1;
         let _ = self
             .sender
-            .send(BleDeviceEvent::StartResistance { channel_type, ret })
+            .send(BleDeviceEventType::StartResistance { channel_type, ret })
             .await;
 
         rx.await.ok()
@@ -640,9 +640,9 @@ impl BleHandle {
     }
 }
 
-/// Type of events sent to the event loop from [`BBitSensor`]
+/// Type of events sent to the event loop of [`BBitSensor`]
 #[derive(Debug)]
-enum BleDeviceEvent {
+enum BleDeviceEventType {
     /// Stop the Signal or Resistance measurement
     Stop,
     /// Send config command for Signal and start the event loop
