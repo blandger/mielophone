@@ -6,7 +6,7 @@ use btleplug::{
     platform::{Adapter, Manager, Peripheral},
 };
 use futures::stream::StreamExt;
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
@@ -180,19 +180,6 @@ impl BBitSensor {
         }
         Err(Error::NoControlPointAssigned)
     }
-
-    /// Start measurement while event loop is running
-    /*pub async fn start(&self, ty: H10MeasurementType) -> BBitResult<ControlResponse> {
-        self.get_pmd_response(ControlPointCommand::RequestMeasurementStart, ty)
-            .await
-    }*/
-
-    /// Stop measurement while event loop is running
-    /*pub async fn stop(&self, ty: H10MeasurementType) -> BBitResult<ControlResponse> {
-        self.get_pmd_response(ControlPointCommand::StopMeasurement, ty)
-            .await
-    }*/
-
 
     async fn device(&self) -> BBitResult<&Peripheral> {
         if let Some(device) = &self.ble_device {
