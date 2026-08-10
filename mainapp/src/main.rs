@@ -55,7 +55,7 @@ async fn main() -> color_eyre::Result<()> {
     debug!("Connected");
 
     sensor.listen(EventType::EegOrResistance);
-    // sensor.build().await?;
+    sensor.build().await?;
 
     let paused_loop = Arc::new(AtomicBool::new(false));
     let shutdown_token = CancellationToken::new();

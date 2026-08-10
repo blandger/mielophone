@@ -45,13 +45,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     debug!("Connected");
 
     sensor.listen(EventType::State);
-    // sensor.build().await?;
+    sensor.build().await?;
 
     let paused_loop = Arc::new(AtomicBool::new(false));
     let shutdown_token = CancellationToken::new();
 
     sensor
-        .event_loop(Handler::new().await?, paused_loop, shutdown_token);
+        .event_loop(Handler::new().await?, paused_loop, shutdown_token).await?;
     tracing::info!("BrainBit is connected, event loop is started");
     // connected.start();
 

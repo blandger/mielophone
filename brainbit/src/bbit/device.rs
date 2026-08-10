@@ -6,7 +6,7 @@ use futures::StreamExt;
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 
 use crate::bbit::channel::{ADS1294ChannelInput, ChannelType};
@@ -18,8 +18,8 @@ use crate::bbit::errors::BBitResult;
 use crate::bbit::traits::EventHandler;
 use crate::bbit::uuids::{
     EventType, FIRMWARE_REVISION_STRING_UUID, HARDWARE_REVISION_STRING_UUID,
-    MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID, NotifyStream, NotifyUuid,
-    PERIPHERAL_NAME_MATCH_FILTER, SERIAL_NUMBER_STRING_UUID,
+    MODEL_NUMBER_STRING_UUID, NotifyStream, NotifyUuid,
+    SERIAL_NUMBER_STRING_UUID,
 };
 use crate::{Error, find_characteristic};
 use tokio::time::{self, Duration};
@@ -73,21 +73,41 @@ impl BBitSensor {
     }
 
     async fn find_device(&self, central: &Adapter) -> Option<Peripheral> {
-        for p in central.peripherals().await.unwrap() {
-            if p.properties()
-                .await
-                .unwrap()
-                .unwrap()
-                .local_name
-                .iter()
-                .any(|name| {
-                    name.starts_with(PERIPHERAL_NAME_MATCH_FILTER)
-                        && name.ends_with(&self.device_id)
-                })
-            {
-                return Some(p);
+        debug!("Finding device '{}'...", &self.device_id);
+        let peripherals = central.peripherals().await.unwrap();
+        debug!("Found [{}] peripherals", peripherals.len());
+        for p in peripherals {
+            match p.properties().await {
+                Ok(Some(props)) => {
+                    trace!(
+                        "Peripheral: id={:?}, name={:?}, address={:?}, rssi={:?}, services={:?}",
+                        p.id(),
+                        props.local_name,
+                        props.address,
+                        props.rssi,
+                        props.services,
+                    );
+
+                    if props.local_name.as_deref().is_some_and(|name| {
+                        name.starts_with(&self.device_id)
+                    }) {
+                        debug!("MATCH: {:?}", p);
+                        return Some(p);
+                    }
+                }
+                Ok(None) => {
+                    debug!("Peripheral {:?}: no properties", p.id());
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        "Failed to get properties for {:?}",
+                        p.id()
+                    );
+                }
             }
         }
+        warn!("No device found !");
         None
     }
 
@@ -95,13 +115,13 @@ impl BBitSensor {
     ///
     #[instrument(skip(self))]
     pub async fn connect(&mut self) -> BBitResult<()> {
-        debug!("Trying to connect to '{:?}'...", &self.device_id);
+        debug!("Trying to connect to {:?}...", &self.device_id);
         let adapters_result = self.ble_manager.adapters().await.map_err(Error::BleError);
 
         if let Ok(adapters) = adapters_result {
             debug!("Found [{}] adapter(s)", adapters.len());
             if adapters.is_empty() {
-                tracing::error!("No ble adaptor found");
+                error!("No ble adaptor found");
                 return Err(Error::NoBleAdaptor);
             }
 
@@ -109,22 +129,39 @@ impl BBitSensor {
                 .into_iter()
                 .next()
                 .expect("No adaptor found, crash");
+
             debug!("Start scanning for 2 sec...");
-            let mut scan_filter = ScanFilter::default();
-            scan_filter.services.push(NSS2_SERVICE_UUID);
-            central
-                .start_scan(scan_filter)
-                .await
-                .map_err(Error::BleError)?;
-            time::sleep(Duration::from_secs(2)).await;
+            let scan_filter = ScanFilter::default();
+            central.start_scan(scan_filter).await.map_err(|e| {
+                error!(
+                error = %e,
+                device_id = ?self.device_id,
+                "start_scan(scan_filter) failed"
+                );
+                Error::BleError(e)
+            })?;
+            time::sleep(Duration::from_secs(3)).await;
+
+            central.stop_scan().await.ok();
 
             self.ble_device = self.find_device(&central).await;
 
             if let Some(device) = &self.ble_device {
                 debug!("BLE '{}' is found, try to connect...", &self.device_id);
-                device.connect().await.map_err(Error::BleError)?;
+                device.connect().await.map_err(|e| {
+                    error!(
+                        error = %e,
+                        device_id = ?self.device_id,
+                        "device.connect() failed"
+                    );
+                    Error::BleError(e)
+                })?;
                 debug!("Try to discover services...");
-                device.discover_services().await.map_err(Error::BleError)?;
+                device
+                    .discover_services()
+                    .await
+                    .inspect_err(|e| error!(error = %e, "discover_services() failed"))
+                    .map_err(Error::BleError)?;
 
                 let controller = ControlPoint::new(device).await?;
                 self.control_point = Some(controller);
@@ -132,7 +169,7 @@ impl BBitSensor {
             }
             return Err(Error::NoDevice);
         }
-        tracing::error!("No ble adaptor found, end...");
+        error!("No ble adaptor found, end...");
         Err(Error::NoBleAdaptor)
     }
 
@@ -395,7 +432,7 @@ impl BBitSensor {
             &self.subscribed_data_event_types
         );
         // stop all previous if any
-        self.stop_measurement().await?;
+        // self.stop_measurement().await?;
 
         // look for subscribed events
         for event_type in &self.subscribed_data_event_types {
@@ -435,7 +472,7 @@ impl BBitSensor {
                     _ = shutdown_token.cancelled() => return Ok(LoopExit::Shutdown),
 
                      maybe_data = notification_stream.next() => {
-                        tracing::trace!("loop - received Bluetooth data: {:02X?}", &maybe_data);
+                        trace!("loop - received Bluetooth data: {:02X?}", &maybe_data);
                         let Some(data) = maybe_data else {
                             return Ok(LoopExit::Disconnected);
                         };
@@ -447,7 +484,7 @@ impl BBitSensor {
                         }
                         if data.uuid == Uuid::from(NotifyUuid::DeviceStateChange) {
                             let result = DeviceStatus::try_from(data.value);
-                            tracing::trace!("loop - received DeviceStatusData: {result:?}");
+                            trace!("loop - received DeviceStatusData: {result:?}");
                             match result {
                                 Ok(status_data) => {
                                     // bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await

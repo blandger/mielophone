@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(fmt::layer())
         .with(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "connect=DEBUG,brainbit=DEBUG".into()),
+                .unwrap_or_else(|_| "connect=DEBUG,brainbit=DEBUG,btleplug=TRACE".into()),
         )
         .init();
 
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let characteristics = sensor.characteristics();
 
     // list all characteristics
-    for char in characteristics {
+    for char in characteristics? {
         tracing::info!("characteristic: {char:?}");
     }
     // get device information
