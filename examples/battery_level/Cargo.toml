@@ -10,6 +10,7 @@ description = "Subscribe on BBit device status changes including battery level"
 [dependencies]
 brainbit = { version = "0.1.0", path = "../../brainbit" }
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 async-trait.workspace = true

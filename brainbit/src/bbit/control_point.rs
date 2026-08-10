@@ -1,6 +1,6 @@
 use crate::bbit::errors::BBitResult;
 use crate::bbit::uuids::WRITE_COMMAND_UUID;
-use crate::{find_characteristic, Error};
+use crate::{Error, find_characteristic};
 use btleplug::api::{Characteristic, Peripheral as _, WriteType};
 use btleplug::platform::Peripheral;
 use tracing::debug;
@@ -151,7 +151,7 @@ impl TryFrom<&[u8]> for ControlPointCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bbit::device_mode::ADS1294ChannelInput;
+    use crate::bbit::channel::ADS1294ChannelInput;
 
     #[test]
     fn test_resist_command_layout() {

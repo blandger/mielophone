@@ -1,12 +1,13 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
+use crate::bbit::resistance::ResistState;
 
 // Maximum battery level encoded in byte without sign (highest bit)
 pub(crate) const MAX_BATTERY_LEVEL: u8 = 0x57; // 87 in decimal
 
 /// A common device's state type
 // ??? Probably it's returned from UUID = 6E400002-B534-F393-68A9-E50E24DCCA9E (READ / NOTIFY)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/*#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommonDeviceState {
     /// device is not initialized
     Invalid,
@@ -18,11 +19,11 @@ pub enum CommonDeviceState {
     PowerDown,
     /// DFU loader mode
     Dfu,
-}
+}*/
 
 /// Common Device status data including NSS2 service state, Commands execution state, battery level, Firmware version
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DeviceStatusData {
+pub struct DeviceStatus {
     /// NNS service state
     pub status_nss2: Nss2Status,
     // Error code. It's reset when new command is received
@@ -31,19 +32,23 @@ pub struct DeviceStatusData {
     pub battery_level: u8, // 87 is a max value = 100% charge
     /// Firmware version
     pub firmware_version: u8,
+    // Populated by ResistanceAccumulator after each full scan.
+    // None until first scan completes.
+    pub resist_state: Option<ResistState>,
 }
-impl Default for DeviceStatusData {
+impl Default for DeviceStatus {
     fn default() -> Self {
         Self {
             status_nss2: Nss2Status::Initial,
             cmd_error: CommandExecutionState::Ok,
             battery_level: 0,
             firmware_version: 0,
+            resist_state: None,
         }
     }
 }
 
-impl DeviceStatusData {
+impl DeviceStatus {
     /// Return battery charge level in % percents
     pub fn get_battery_charge_level(&self) -> f32 {
         (self.battery_level as f32) * 100.0 / MAX_BATTERY_LEVEL as f32
@@ -54,10 +59,10 @@ impl DeviceStatusData {
     }
 }
 
-impl TryFrom<Vec<u8>> for DeviceStatusData {
+impl TryFrom<Vec<u8>> for DeviceStatus {
     type Error = &'static str;
 
-    /// Create new instance of [`DeviceStatusData`] from Vec<u8>.
+    /// Create new instance of [`DeviceStatus`] from Vec<u8>.
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         if value.is_empty() || value.len() != 4 {
             eprintln!("Invalid DeviceStatus result vec length {:?}", value);
@@ -73,15 +78,16 @@ impl TryFrom<Vec<u8>> for DeviceStatusData {
             cmd_error,
             battery_level,
             firmware_version,
+            resist_state: None,
         })
     }
 }
 
-impl Display for DeviceStatusData {
+impl Display for DeviceStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Status='{:?}', Err={:?}, Bat='{:03.1?}%'",
+            "Status='{}', Err={:?}, Bat='{:03.1?}%'",
             self.status_nss2,
             self.cmd_error,
             self.get_battery_charge_level() // formatted as 89.7%
@@ -100,8 +106,8 @@ pub enum Nss2Status {
     EegTransmission = 0x02,
     /// sensor is connected, started resistance measurement, service sends resist data to host
     ResistTransmission = 0x03,
-    /// DFU loader mode
-    DfuBootLoderMode = 0x04,
+    /// DFU loader mode. We do not use it.
+    DfuBootLoaderMode = 0x04,
 }
 impl TryFrom<u8> for Nss2Status {
     type Error = &'static str;
@@ -112,14 +118,31 @@ impl TryFrom<u8> for Nss2Status {
             0x01 => Ok(Self::Stopped),
             0x02 => Ok(Self::EegTransmission),
             0x03 => Ok(Self::ResistTransmission),
-            0x04 => Ok(Self::DfuBootLoderMode),
-            _ => Err("Nss2Status value is incorrect"),
+            0x04 => Ok(Self::DfuBootLoaderMode),
+            _ => Err("Incorrect"),
         }
     }
 }
 impl Into<u8> for Nss2Status {
     fn into(self) -> u8 {
         self as u8
+    }
+}
+
+impl Display for Nss2Status {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "'{}'",
+            match self {
+                Self::Initial => "Initial",
+                Self::Stopped => "Stop",
+                Self::ResistTransmission => "Resist",
+                Self::EegTransmission => "EEG",
+                Self::DfuBootLoaderMode => "DFU",
+                // _ => "Invalid",
+            }
+        )
     }
 }
 
@@ -145,6 +168,19 @@ impl TryFrom<u8> for CommandExecutionState {
         }
     }
 }
+impl Display for CommandExecutionState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            match self {
+                Self::Ok => "Ok",
+                Self::CommandLengthError => "CmdErr",
+                Self::SwitchModeError => "SwitchErr",
+            }
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -156,7 +192,7 @@ mod tests {
         let status_result = source_data.try_into();
         tracing::trace!("{status_result:?}");
         assert!(status_result.is_ok());
-        let status: DeviceStatusData = status_result.unwrap();
+        let status: DeviceStatus = status_result.unwrap();
         assert_eq!(87, status.battery_level);
         tracing::trace!("{:?}", status.get_battery_charge_level());
         assert_eq!(100f32, status.get_battery_charge_level());
@@ -169,7 +205,7 @@ mod tests {
         let status_result = source_data.try_into();
         tracing::trace!("{status_result:?}");
         assert!(status_result.is_ok());
-        let status: DeviceStatusData = status_result.unwrap();
+        let status: DeviceStatus = status_result.unwrap();
         assert_eq!(81, status.battery_level);
         tracing::trace!("{:?}", status.get_battery_charge_level());
         assert_eq!(93.10345, status.get_battery_charge_level());
@@ -182,7 +218,7 @@ mod tests {
         let status_result = source_data.try_into();
         tracing::trace!("{status_result:?}");
         assert!(status_result.is_ok());
-        let status: DeviceStatusData = status_result.unwrap();
+        let status: DeviceStatus = status_result.unwrap();
         assert_eq!(67, status.battery_level);
         tracing::trace!("{:?}", status.get_battery_charge_level());
         assert_eq!(77.0115, status.get_battery_charge_level());

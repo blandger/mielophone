@@ -10,6 +10,7 @@ description = "Data handler code, calculations, resistance check"
 [dependencies]
 brainbit = { path = "../brainbit" }
 tracing.workspace = true
+tokio-util.workspace = true
 tracing-subscriber.workspace = true
 color-eyre.workspace = true
 chrono.workspace = true

@@ -12,6 +12,7 @@ brainbit = { path = "../brainbit" }
 handler = { path = "../handler" }
 
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

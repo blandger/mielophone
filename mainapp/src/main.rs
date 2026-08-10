@@ -3,10 +3,12 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, instrument};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use brainbit::bbit::device::BBitSensor;
 use brainbit::bbit::uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
@@ -52,17 +54,16 @@ async fn main() -> color_eyre::Result<()> {
     }
     debug!("Connected");
 
-    /*sensor
-        .listen(EventType::State)
-        .listen(EventType::EegOrResistance)
-        .build()
-        .await?;*/
+    sensor.listen(EventType::EegOrResistance);
+    // sensor.build().await?;
+
+    let paused_loop = Arc::new(AtomicBool::new(false));
+    let shutdown_token = CancellationToken::new();
 
     let log_file_name = "main_app_output.txt";
-    let handler = sensor
-        .event_handler(handler::main_handler::BBitHandler::new(log_file_name).await?);
+    let loop_result = sensor
+        .event_loop(handler::main_handler::BBitHandler::new(log_file_name).await?, paused_loop, shutdown_token).await?;
     tracing::info!("BrainBit is connected, event loop is started");
-    // handler.start().await;
 
     get_finish(&AtomicUsize::default()).await?;
     // handler.stop().await;

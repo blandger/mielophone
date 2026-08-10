@@ -1,30 +1,35 @@
-use std::collections::BTreeSet;
-use std::sync::{Arc, OnceLock};
-
 use btleplug::{
     api::{Central, Characteristic, Manager as _, Peripheral as _, ScanFilter},
     platform::{Adapter, Manager, Peripheral},
 };
-use futures::stream::StreamExt;
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
+use futures::StreamExt;
+use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
+use crate::bbit::channel::{ADS1294ChannelInput, ChannelType};
 use crate::bbit::control_point::{ControlCommandType, ControlPoint, ControlPointCommand};
-use crate::bbit::device_mode::{ADS1294ChannelInput, ChannelType, DeviceMode};
-use crate::bbit::responses::DeviceStatusData;
+use crate::bbit::device_info::DeviceInfo;
+use crate::bbit::device_mode::{DeviceMode, LoopExit};
+use crate::bbit::device_status::DeviceStatus;
 use crate::bbit::errors::BBitResult;
 use crate::bbit::traits::EventHandler;
-use crate::bbit::uuids::{EventType, NotifyStream, NotifyUuid, FIRMWARE_REVISION_STRING_UUID, HARDWARE_REVISION_STRING_UUID, MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID, PERIPHERAL_NAME_MATCH_FILTER, SERIAL_NUMBER_STRING_UUID};
-use crate::{find_characteristic, Error};
-use crate::bbit::device_info::DeviceInfo;
+use crate::bbit::uuids::{
+    EventType, FIRMWARE_REVISION_STRING_UUID, HARDWARE_REVISION_STRING_UUID,
+    MODEL_NUMBER_STRING_UUID, NSS2_SERVICE_UUID, NotifyStream, NotifyUuid,
+    PERIPHERAL_NAME_MATCH_FILTER, SERIAL_NUMBER_STRING_UUID,
+};
+use crate::{Error, find_characteristic};
 use tokio::time::{self, Duration};
+use tokio_util::sync::CancellationToken;
 
 /// Structure to contain EEG data and interval.
 #[derive(Debug, Clone)]
 pub struct CommandData {
-    data: i16,
-    cmd_type: ControlPointCommand,
+    _data: i16,
+    _cmd_type: ControlPointCommand,
 }
 
 /// The core sensor manager
@@ -38,7 +43,7 @@ pub struct BBitSensor {
     /// Handler for event callbacks
     event_handler: Option<Arc<dyn EventHandler>>,
     /// BLE event type currently subscribed and processed
-    pub data_type: Vec<EventType>,
+    pub subscribed_data_event_types: Vec<EventType>,
     /// Device manage and send commands
     pub control_point: Option<ControlPoint>,
     /// Common device information like model, serial numbers, HW, SW revisions
@@ -51,7 +56,9 @@ impl BBitSensor {
     /// Returns a [`Error::BleError`] if the Bluetooth manager could not be created
     pub async fn new(device_id: String) -> BBitResult<Self> {
         if device_id.len() != 8 {
-            return Err(Error::InvalidData("BrainBit device name is missing".to_string()));
+            return Err(Error::InvalidData(
+                "BrainBit device name is missing".to_string(),
+            ));
         }
         let ble_manager = Manager::new().await.map_err(Error::BleError)?;
         Ok(Self {
@@ -59,7 +66,7 @@ impl BBitSensor {
             ble_manager,
             ble_device: None,
             event_handler: None,
-            data_type: vec![],
+            subscribed_data_event_types: vec![],
             control_point: None,
             device_info: OnceLock::new(),
         })
@@ -73,7 +80,10 @@ impl BBitSensor {
                 .unwrap()
                 .local_name
                 .iter()
-                .any(|name| name.starts_with(PERIPHERAL_NAME_MATCH_FILTER) && name.ends_with(&self.device_id))
+                .any(|name| {
+                    name.starts_with(PERIPHERAL_NAME_MATCH_FILTER)
+                        && name.ends_with(&self.device_id)
+                })
             {
                 return Some(p);
             }
@@ -85,16 +95,20 @@ impl BBitSensor {
     ///
     #[instrument(skip(self))]
     pub async fn connect(&mut self) -> BBitResult<()> {
-        debug!("trying to connect to '{:?}'...", &self.device_id);
+        debug!("Trying to connect to '{:?}'...", &self.device_id);
         let adapters_result = self.ble_manager.adapters().await.map_err(Error::BleError);
 
         if let Ok(adapters) = adapters_result {
+            debug!("Found [{}] adapter(s)", adapters.len());
             if adapters.is_empty() {
                 tracing::error!("No ble adaptor found");
                 return Err(Error::NoBleAdaptor);
             }
 
-            let central = adapters.into_iter().next().expect("No adaptor found, crash");
+            let central = adapters
+                .into_iter()
+                .next()
+                .expect("No adaptor found, crash");
             debug!("Start scanning for 2 sec...");
             let mut scan_filter = ScanFilter::default();
             scan_filter.services.push(NSS2_SERVICE_UUID);
@@ -165,6 +179,20 @@ impl BBitSensor {
         Err(Error::NotConnected)
     }
 
+    pub fn listen(&mut self, event_type: EventType) {
+        if !self.subscribed_data_event_types.contains(&event_type) {
+            self.subscribed_data_event_types.push(event_type);
+        }
+    }
+
+    pub async fn build(&self) -> BBitResult<()> {
+        // self.stop_measurement().await?;
+        for event_type in &self.subscribed_data_event_types {
+            self.subscribe(NotifyStream::from(*event_type)).await?;
+        }
+        Ok(())
+    }
+
     pub async fn is_connected(&self) -> bool {
         if let Some(device) = &self.ble_device {
             if let Ok(v) = device.is_connected().await {
@@ -200,11 +228,6 @@ impl BBitSensor {
         let data = self.read(uuid).await?;
         let string = String::from_utf8_lossy(&data).into_owned();
         Ok(string.trim_matches(char::from(0)).to_string())
-    }
-
-    /// Sets an event handler with multiple methods for each possible event.
-    pub fn event_handler<H: EventHandler + 'static>(&mut self, event_handler: H) {
-        self.event_handler = Some(Arc::new(event_handler));
     }
 
     /// Send command as enum to [`ControlPoint`].
@@ -338,7 +361,11 @@ impl BBitSensor {
             let _ = self.device_info.set(device_info);
         }
         debug!("device info: '{:?}'", self.device_info.get());
-        Ok(self.device_info.get().expect("DeviceInfo is not initialized?").clone())
+        Ok(self
+            .device_info
+            .get()
+            .expect("DeviceInfo is not initialized?")
+            .clone())
     }
 
     /// Fetch all characteristics of the device
@@ -346,9 +373,117 @@ impl BBitSensor {
         let device = self.ble_device.as_ref().unwrap();
         Ok(device.characteristics())
     }
+
+    // Sets an event handler with multiple methods for each possible event.
+    /*    pub fn event_handler<H: EventHandler + 'static>(&mut self, event_handler: H) {
+        self.event_handler = Some(Arc::new(event_handler));
+    }*/
+
+    // Start the event loop
+    #[instrument(skip_all)]
+    pub async fn event_loop<H>(
+        &self,
+        handler: H,
+        paused: Arc<AtomicBool>,
+        shutdown_token: CancellationToken,
+    ) -> BBitResult<LoopExit>
+    where
+        H: EventHandler + Send + Sync,
+    {
+        tracing::info!(
+            "starting event_loop... we have event list to subscribe to: {:?}",
+            &self.subscribed_data_event_types
+        );
+        // stop all previous if any
+        self.stop_measurement().await?;
+
+        // look for subscribed events
+        for event_type in &self.subscribed_data_event_types {
+            use EventType::*;
+            if let State = event_type {
+                let _ = self.subscribe_device_status_change().await;
+            }
+            if let EegOrResistance = event_type {
+                let _ = self
+                    .subscribe(NotifyStream::EegOrResistanceMeasurement)
+                    .await;
+            }
+        }
+        let mut ticker = time::interval(Duration::from_millis(500));
+
+        // let bt_sensor = Arc::new(self);
+        // let event_sensor = Arc::clone(&bt_sensor);
+        /*        let eh = &self
+        .event_handler
+        .as_ref()
+        .expect("BrainBit: Event loop requires an event handler.");*/
+
+        if let Some(device) = &self.ble_device {
+            let mut notification_stream = device.notifications().await.map_err(Error::BleError)?;
+
+            // let (bt_tx, mut bt_rx) = mpsc::channel(128);
+            // let (pause_tx, pause_rx) = watch::channel(false);
+
+            // tracing::info!("starting event loop task...");
+            // tokio::task::spawn(async move {
+            // let device = bt_sensor.ble_device.as_ref().unwrap();
+            // let mut notification_stream = device.notifications().await?;
+
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = shutdown_token.cancelled() => return Ok(LoopExit::Shutdown),
+
+                     maybe_data = notification_stream.next() => {
+                        tracing::trace!("loop - received Bluetooth data: {:02X?}", &maybe_data);
+                        let Some(data) = maybe_data else {
+                            return Ok(LoopExit::Disconnected);
+                        };
+                        if paused.load(Ordering::Relaxed) { continue; }
+                        if !handler.should_continue().await {
+                            debug!("loop SHOULD NOT continue: ignoring data all data");
+                            return Ok(LoopExit::Shutdown);
+                            // continue;
+                        }
+                        if data.uuid == Uuid::from(NotifyUuid::DeviceStateChange) {
+                            let result = DeviceStatus::try_from(data.value);
+                            tracing::trace!("loop - received DeviceStatusData: {result:?}");
+                            match result {
+                                Ok(status_data) => {
+                                    // bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await
+                                    handler.device_status_update(status_data).await
+                                }
+                                Err(error) => {
+                                    debug!("Error receiving Device Status data: {error:?}");
+                                }
+                            }
+                        } else if data.uuid == Uuid::from(NotifyUuid::EegOrResistanceMeasurementChange) {
+                            let eeg_or_resist_data = data.value;
+                            tracing::trace!(
+                                "loop - received eeg-resist_data: {:02X?}",
+                                eeg_or_resist_data
+                            );
+                            // bt_tx.send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data)).await
+                            handler.eeg_update(self, eeg_or_resist_data).await
+                        }
+                    }
+                // Ok(())
+                    _ = ticker.tick() => {
+                        if !self.is_connected().await {
+                            return Ok(LoopExit::Disconnected);
+                        }
+                    }
+                } //tokio::select!
+            }
+            // });
+            // Ok(())
+        } else {
+            Err(Error::NoBleAdaptor)
+        }
+    }
 }
 
-/// Assign configurable parameters for BBit device
+// Assign configurable parameters for BBit device
 /*impl BBitSensor<Configure> {
     /// Add a data type to listen to
     #[instrument(skip(self))]
@@ -574,8 +709,8 @@ impl BBitSensor {
 
 }*/
 
-/// Handle to the [`BBitSensor`] that is running an event loop
-#[derive(Clone)]
+// Handle to the [`BBitSensor`] that is running an event loop
+/*#[derive(Clone)]
 pub struct BleHandle {
     sender: mpsc::Sender<BleDeviceEventType>,
     pause: Arc<watch::Sender<bool>>,
@@ -614,7 +749,7 @@ impl BleHandle {
     /// events from being sent to your handler.
     #[instrument(skip_all)]
     pub fn pause(&self) {
-        tracing::info!("pausing bluetooth event handling");
+        tracing::info!("pausing Bluetooth event handling");
         let _ = self.pause.send(true);
     }
 
@@ -622,7 +757,7 @@ impl BleHandle {
     /// event handling.
     #[instrument(skip_all)]
     pub fn resume(&self) {
-        tracing::info!("resuming bluetooth event handling");
+        tracing::info!("resuming Bluetooth event handling");
         let _ = self.pause.send(false);
     }
 }
@@ -649,6 +784,6 @@ enum BleDeviceEventType {
 /// Bluetooth data received from the sensor
 #[derive(Debug)]
 enum BluetoothEvent {
-    DeviceStatus(DeviceStatusData),
+    DeviceStatus(DeviceStatus),
     EggOrResistanceData(Vec<u8>),
-}
+}*/

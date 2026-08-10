@@ -6,8 +6,9 @@ use std::sync::Mutex;
 use tracing::{debug, instrument};
 
 use async_trait::async_trait;
+use brainbit::bbit::device::BBitSensor;
 use brainbit::bbit::resistance::ResistState;
-use brainbit::bbit::responses::{DeviceStatusData, Nss2Status};
+use brainbit::bbit::device_status::{DeviceStatus, Nss2Status};
 use brainbit::bbit::traits::EventHandler;
 
 const SKIP_FIRST_RESIST_RECORDS_NUMBER: usize = 20;
@@ -18,7 +19,7 @@ pub struct BBitHandler {
     /// count packets from device during measurement on one channel, then it switches to the next and starts again from Zero
     current_chanel_counter: AtomicUsize,
     /// internal device status
-    device_status: Mutex<DeviceStatusData>,
+    device_status: Mutex<DeviceStatus>,
     /// data file written with device data
     output: Mutex<File>,
     /// we skip 'SKIP_FIRST_RESIST_RECORDS_NUMBER' resist records on every channel
@@ -34,7 +35,7 @@ pub struct BBitHandler {
 #[async_trait]
 impl EventHandler for BBitHandler {
     #[instrument(skip(self))]
-    async fn device_status_update(&self, status_data: DeviceStatusData) {
+    async fn device_status_update(&self, status_data: DeviceStatus) {
         let time = Utc::now();
         let formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         // formatted = formatted.replace("\'", "");
@@ -56,7 +57,7 @@ impl EventHandler for BBitHandler {
     }
 
     #[instrument(skip_all)]
-    async fn eeg_update(self: &mut BBitHandler, eeg_data: Vec<u8>) {
+    async fn eeg_update(&self, ctx: &BBitSensor, eeg_data: Vec<u8>) {
         let time = Utc::now();
         let mut _formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         _formatted = _formatted.replace("\'", "");
@@ -71,12 +72,12 @@ impl EventHandler for BBitHandler {
             Nss2Status::ResistTransmission => {
                 debug!(msg);
                 let skipped_number = self.skipped_resist_records_number.load(Ordering::Relaxed);
-                if skipped_number > 0 {
+                /*if skipped_number > 0 {
                     // skip 'SKIP_FIRST_RESIST_RECORDS_NUMBER' records
                     debug!("Skipping = {:?} packet", skipped_number);
                     self.decrease_skipped_resist_records_number();
                     return;
-                }
+                }*/
                 let gathered_records_number = self.get_resist_measure_records_len();
                 if gathered_records_number >= STORE_RESIST_RECORDS_NUMBER {
                     debug!(
@@ -103,7 +104,7 @@ impl BBitHandler {
     pub async fn new(log_file_name: &str) -> color_eyre::Result<Self> {
         Ok(Self {
             current_chanel_counter: AtomicUsize::new(0),
-            device_status: Mutex::new(DeviceStatusData::default()),
+            device_status: Mutex::new(DeviceStatus::default()),
             output: Mutex::new(File::create(log_file_name)?),
             skipped_resist_records_number: AtomicUsize::new(
                 SKIP_FIRST_RESIST_RECORDS_NUMBER,

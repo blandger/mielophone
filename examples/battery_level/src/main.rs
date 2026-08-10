@@ -4,14 +4,16 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, instrument};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use brainbit::bbit::device::BBitSensor;
-use brainbit::bbit::responses::DeviceStatusData;
+use brainbit::bbit::device_status::DeviceStatus;
 use brainbit::bbit::traits::EventHandler;
 use brainbit::bbit::uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 
@@ -27,8 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let mut sensor = BBitSensor::new(PERIPHERAL_NAME_MATCH_FILTER.to_string())
-        .await
-        .expect("Invalid BBit name");
+        .await?;
 
     debug!("Attempting connection");
     while !sensor.is_connected().await {
@@ -43,8 +44,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     debug!("Connected");
 
+    sensor.listen(EventType::State);
+    // sensor.build().await?;
+
+    let paused_loop = Arc::new(AtomicBool::new(false));
+    let shutdown_token = CancellationToken::new();
+
     sensor
-        .event_handler(Handler::new().await?);
+        .event_loop(Handler::new().await?, paused_loop, shutdown_token);
     tracing::info!("BrainBit is connected, event loop is started");
     // connected.start();
 
@@ -70,7 +77,7 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[async_trait]
 impl EventHandler for Handler {
     #[instrument(skip(self))]
-    async fn device_status_update(&self, status_data: DeviceStatusData) {
+    async fn device_status_update(&self, status_data: DeviceStatus) {
         debug!("received Status: {status_data}");
         COUNTER.fetch_add(1, Ordering::SeqCst);
     }

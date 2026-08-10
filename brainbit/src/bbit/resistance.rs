@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,19 @@ impl Default for ResistState {
         }
     }
 }
+impl Display for ResistState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "T3={}--T4={}\n
+ O1={}-O2={}",
+            self.ch_t3,
+            self.ch_t4,
+            self.ch_o1,
+            self.ch_o2,
+        )
+    }
+}
 
 /// Result of measurement and computation received data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,4 +59,17 @@ pub enum ChannelQuality {
     GOOD,
     /// Bad electrode's to head contact
     BAD,
+}
+impl Display for ChannelQuality {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}'",
+            match self {
+                ChannelQuality::NONE => "0",
+                ChannelQuality::GOOD => "✅",
+                ChannelQuality::BAD => "❌",
+            }
+        )
+    }
 }
