@@ -239,6 +239,27 @@ impl BBitSensor {
         false
     }
 
+    /// Gracefully stop the device: stop any running measurement, unsubscribe
+    /// from all subscribed streams and disconnect from the device.
+    ///
+    /// Use it for graceful shutdown of the app, so the headset is left in a
+    /// clean state. Safe to call when the device is already disconnected:
+    /// returns `Ok` and does nothing in that case.
+    #[instrument(skip(self))]
+    pub async fn stop(&self) -> BBitResult<()> {
+        if !self.is_connected().await {
+            return Ok(());
+        }
+        self.stop_measurement().await?;
+        for event_type in &self.subscribed_data_event_types {
+            let _ = self.unsubscribe(NotifyStream::from(*event_type)).await;
+        }
+        if let Some(device) = &self.ble_device {
+            device.disconnect().await.map_err(Error::BleError)?;
+        }
+        Ok(())
+    }
+
     async fn controller(&self) -> BBitResult<&ControlPoint> {
         if let Some(controller) = &self.control_point {
             return Ok(controller);
@@ -280,7 +301,7 @@ impl BBitSensor {
 
     /// Stop any type of possible measurement
     #[instrument(skip(self))]
-    async fn stop_measurement(&self) -> BBitResult<()> {
+    pub async fn stop_measurement(&self) -> BBitResult<()> {
         debug!("Stopping any measurement...");
         let controller = self.controller().await?;
         let device = self.device().await?;
@@ -416,7 +437,16 @@ impl BBitSensor {
         self.event_handler = Some(Arc::new(event_handler));
     }*/
 
-    // Start the event loop
+    /// Start the event loop. Runs until the loop exits and returns the exit reason.
+    ///
+    /// The loop exits with [`LoopExit::Shutdown`] when `shutdown_token` is
+    /// cancelled, or with [`LoopExit::Disconnected`] when the BLE link drops.
+    ///
+    /// NOTE: a [`CancellationToken`] is one-shot — after cancellation it stays
+    /// cancelled forever, so every (re)start of the loop must be given a
+    /// brand-new token. After [`LoopExit::Disconnected`] the connection must
+    /// be re-established (see [`BBitSensor::connect`]) before starting a new
+    /// loop.
     #[instrument(skip_all)]
     pub async fn event_loop<H>(
         &self,

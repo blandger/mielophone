@@ -87,7 +87,7 @@ impl Display for DeviceStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Status='{}', Err={:?}, Bat='{:03.1?}%'",
+            "Status={}, Err={:?}, Bat='{:03.1?}%'",
             self.status_nss2,
             self.cmd_error,
             self.get_battery_charge_level() // formatted as 89.7%
