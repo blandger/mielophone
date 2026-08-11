@@ -404,7 +404,7 @@ impl BBitSensor {
     #[instrument(skip(self))]
     pub async fn device_info(&self) -> BBitResult<DeviceInfo> {
         tracing::info!("fetching device info...");
-        // on time initialization
+        // on time initialisation
         if self.device_info.get().is_none() {
             let model_number = self.read_string(MODEL_NUMBER_STRING_UUID).await?;
             let serial_number = self.read_string(SERIAL_NUMBER_STRING_UUID).await?;
@@ -461,8 +461,6 @@ impl BBitSensor {
             "starting event_loop... we have event list to subscribe to: {:?}",
             &self.subscribed_data_event_types
         );
-        // stop all previous if any
-        // self.stop_measurement().await?;
 
         // look for subscribed events
         for event_type in &self.subscribed_data_event_types {
@@ -478,23 +476,8 @@ impl BBitSensor {
         }
         let mut ticker = time::interval(Duration::from_millis(500));
 
-        // let bt_sensor = Arc::new(self);
-        // let event_sensor = Arc::clone(&bt_sensor);
-        /*        let eh = &self
-        .event_handler
-        .as_ref()
-        .expect("BrainBit: Event loop requires an event handler.");*/
-
         if let Some(device) = &self.ble_device {
             let mut notification_stream = device.notifications().await.map_err(Error::BleError)?;
-
-            // let (bt_tx, mut bt_rx) = mpsc::channel(128);
-            // let (pause_tx, pause_rx) = watch::channel(false);
-
-            // tracing::info!("starting event loop task...");
-            // tokio::task::spawn(async move {
-            // let device = bt_sensor.ble_device.as_ref().unwrap();
-            // let mut notification_stream = device.notifications().await?;
 
             loop {
                 tokio::select! {
@@ -510,14 +493,12 @@ impl BBitSensor {
                         if !handler.should_continue().await {
                             debug!("loop SHOULD NOT continue: ignoring data all data");
                             return Ok(LoopExit::Shutdown);
-                            // continue;
                         }
                         if data.uuid == Uuid::from(NotifyUuid::DeviceStateChange) {
                             let result = DeviceStatus::try_from(data.value);
                             trace!("loop - received DeviceStatusData: {result:?}");
                             match result {
                                 Ok(status_data) => {
-                                    // bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await
                                     handler.device_status_update(status_data).await
                                 }
                                 Err(error) => {
@@ -526,15 +507,13 @@ impl BBitSensor {
                             }
                         } else if data.uuid == Uuid::from(NotifyUuid::EegOrResistanceMeasurementChange) {
                             let eeg_or_resist_data = data.value;
-                            tracing::trace!(
+                            trace!(
                                 "loop - received eeg-resist_data: {:02X?}",
                                 eeg_or_resist_data
                             );
-                            // bt_tx.send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data)).await
                             handler.eeg_update(self, eeg_or_resist_data).await
                         }
                     }
-                // Ok(())
                     _ = ticker.tick() => {
                         if !self.is_connected().await {
                             return Ok(LoopExit::Disconnected);
@@ -542,239 +521,11 @@ impl BBitSensor {
                     }
                 } //tokio::select!
             }
-            // });
-            // Ok(())
         } else {
             Err(Error::NoBleAdaptor)
         }
     }
 }
-
-// Assign configurable parameters for BBit device
-/*impl BBitSensor<Configure> {
-    /// Add a data type to listen to
-    #[instrument(skip(self))]
-    pub fn listen(mut self, event_type: EventType) -> Self {
-        if self.data_type.contains(&event_type) {
-            return self;
-        }
-        tracing::info!("'{event_type:?}' added to subscribed_data_event_types field");
-        match event_type {
-            EventType::State => {
-                if !self.level.device_status {
-                    self.level.device_status = true;
-                }
-            }
-            EventType::EegOrResistance => {
-                if !self.level.eeg_rate {
-                    self.level.eeg_rate = true;
-                }
-            }
-        }
-
-        self.data_type.push(event_type);
-        self
-    }
-
-    /// Produce the sensor ready for build
-    #[instrument(skip(self))]
-    pub async fn build(self) -> BBitResult<BBitSensor<EventLoop>> {
-        tracing::info!(
-            "Building sensor... Make sure measurements from previous connections are stopped."
-        );
-        self.stop_measurement().await?;
-        if self.level.eeg_rate {
-            debug!("Will subscribe to Resist event...");
-            self.subscribe(EventType::EegOrResistance.into()).await?;
-        }
-        if self.level.device_status {
-            debug!("Will subscribe to DeviceStatus event...");
-            self.subscribe_device_status_change().await?;
-        }
-
-        Ok(BBitSensor {
-            ble_manager: self.ble_manager,
-            ble_device: self.ble_device,
-            control_point: self.control_point,
-            data_type: self.data_type,
-            device_info: self.device_info,
-        })
-    }
-}*/
-
-/*impl BBitSensor<EventLoop> {
-    /// Start the event loop
-    #[instrument(skip_all)]
-    pub async fn event_loop<H>(
-        self,
-        mut handler: H,
-    ) -> BleHandle where H: EventHandler + Sync + Send + 'static, {
-        tracing::info!(
-            "starting event_loop... we have event list to subscribe to: {:?}",
-            &self.data_type
-        );
-
-        // look for subscribed events
-        for event_type in &self.data_type {
-            use EventType::*;
-            if let State = event_type {
-                let _ = self.subscribe_device_status_change().await;
-            }
-            if let EegOrResistance = event_type {
-                let _ = self
-                    .subscribe(NotifyStream::EegOrResistanceMeasurement)
-                    .await;
-            }
-        }
-        let bt_sensor = Arc::new(self);
-        let event_sensor = Arc::clone(&bt_sensor);
-
-        tracing::info!("loop - starting bluetooth task");
-        let (bt_tx, mut bt_rx) = mpsc::channel(128);
-        let (pause_tx, pause_rx) = watch::channel(false);
-
-        tokio::task::spawn(async move {
-            let device = bt_sensor.ble_device.as_ref().unwrap();
-            let mut notification_stream = device.notifications().await?;
-
-            while let Some(data) = notification_stream.next().await {
-                tracing::trace!("loop - received Bluetooth data: {:02X?}", data);
-                if *pause_rx.borrow() {
-                    debug!("loop paused: ignoring data all data");
-                    continue;
-                }
-                if data.uuid == Uuid::from(NotifyUuid::DeviceStateChange) {
-                    let result = DeviceStatusData::try_from(data.value);
-                    tracing::trace!("loop - received DeviceStatusData: {result:?}");
-                    match result {
-                        Ok(status_data) => {
-                            let Ok(_) = bt_tx.send(BluetoothEvent::DeviceStatus(status_data)).await
-                            else {
-                                break;
-                            };
-                        }
-                        Err(error) => {
-                            debug!("Error receiving Device Status data: {error:?}");
-                        }
-                    }
-                } else if data.uuid == Uuid::from(NotifyUuid::EegOrResistanceMeasurementChange) {
-                    let eeg_or_resist_data = data.value;
-                    tracing::trace!(
-                        "loop - received eeg-resist_data: {:02X?}",
-                        eeg_or_resist_data
-                    );
-                    let Ok(_) = bt_tx
-                        .send(BluetoothEvent::EggOrResistanceData(eeg_or_resist_data))
-                        .await
-                    else {
-                        break;
-                    };
-                }
-            }
-
-            Ok::<_, Error>(())
-        });
-
-        tracing::info!("starting event task");
-        let (event_tx, mut event_rx) = mpsc::channel(4);
-        tokio::task::spawn(async move {
-            loop {
-                // either BLE messages or commands comes
-                tokio::select! {
-                    Some(data) = bt_rx.recv() => {
-                        debug!("received bt channel message: {:02X?}", data);
-                        use BluetoothEvent::*;
-                        match data {
-                            DeviceStatus(status_data) => handler.device_status_update(status_data).await,
-                            EggOrResistanceData(eeg_data) => handler.eeg_update(eeg_data).await,
-                        }
-                    }
-                    Some(event) = event_rx.recv() => {
-                        debug!("received event: {:02x?}", event);
-                        match event {
-                            BleDeviceEvent::Stop => {
-                                let res = event_sensor.stop_measurement().await;
-                                debug!("Stop Signal?: {res:?}");
-                                break;
-                            },
-                            BleDeviceEvent::StartSignal{ret} => {
-                                let res = event_sensor.start_measurement(DeviceMode::Eeg).await;
-                                debug!("Started Signal Measurement?: {res:?}");
-                                let _ = ret.send(res);
-                            },
-                            BleDeviceEvent::StartResistance{channel_type, ret} => {
-                                let res = event_sensor.start_measurement(
-                                    DeviceMode::Resistance(channel_type)).await;
-                                debug!("Started Resists Measurement?: {res:?}");
-                                let _ = ret.send(res);
-                            },
-                        }
-                    }
-                    else => {
-                        break;
-                    }
-                }
-            }
-        });
-
-        BleHandle::new(event_tx, pause_tx)
-    }
-}*/
-
-/*impl<L: Level + Connected> BBitSensor<L> {
-    #[instrument(skip(self))]
-    async fn subscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
-        tracing::info!("subscribing to stream of '{:#?}' type...", notify_stream);
-        let device = self.ble_device.as_ref().expect("device already connected");
-
-        let characteristics = device.characteristics();
-        let characteristic = characteristics
-            .iter()
-            .find(|c| c.uuid == Uuid::from(notify_stream))
-            .ok_or(Error::CharacteristicNotFound)?;
-
-        device.subscribe(&characteristic).await?;
-        debug!("DONE, subscribed to stream of '{:?}' type", notify_stream);
-        Ok(())
-    }
-
-    #[instrument(skip(self))]
-    async fn unsubscribe(&self, notify_stream: NotifyStream) -> BBitResult<()> {
-        tracing::info!("unsubscribing from stream of '{notify_stream:?} type...'");
-        let device = self.ble_device.as_ref().unwrap();
-
-        let characteristics = device.characteristics();
-        let characteristic = characteristics
-            .iter()
-            .find(|c| c.uuid == Uuid::from(notify_stream))
-            .ok_or(Error::CharacteristicNotFound)?;
-
-        device.unsubscribe(&characteristic).await?;
-        debug!(
-            "DONE, unsubscribed from stream of '{:?}' type",
-            notify_stream
-        );
-
-        Ok(())
-    }
-
-    /// Fetch all characteristics of the device
-    pub fn characteristics(&self) -> BTreeSet<Characteristic> {
-        let device = self.ble_device.as_ref().unwrap();
-        device.characteristics()
-    }
-
-
-    async fn read(&self, uuid: Uuid) -> BBitResult<Vec<u8>> {
-        let device = self.ble_device.as_ref().unwrap();
-        // let device = self.device().await?;
-        if let Ok(char) = find_characteristic(device, uuid).await {
-            return device.read(&char).await.map_err(Error::BleError);
-        }
-        Err(Error::CharacteristicNotFound)
-    }
-
-}*/
 
 // Handle to the [`BBitSensor`] that is running an event loop
 /*#[derive(Clone)]
