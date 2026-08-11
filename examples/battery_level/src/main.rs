@@ -27,11 +27,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
+    // Global Ctrl+C handler: cancels the app token at ANY moment — while
+    // connecting, running the event loop or reconnecting — and that triggers
+    // graceful shutdown of the loop and the device.
+    let shutdown_token = CancellationToken::new();
+    tokio::spawn({
+        let token = shutdown_token.clone();
+        async move {
+            loop {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    println!("\nCtrl+C received, stopping gracefully...");
+                    token.cancel();
+                }
+            }
+        }
+    });
+
     let mut sensor = BBitSensor::new(PERIPHERAL_NAME_MATCH_FILTER.to_string())
         .await?;
 
     debug!("Attempting connection");
     while !sensor.is_connected().await {
+        if shutdown_token.is_cancelled() {
+            info!("Ctrl+C received, exiting");
+            return Ok(());
+        }
         match sensor.connect().await {
             Err(brainbit::bbit::errors::Error::NoBleAdaptor) => {
                 error!("No Bluetooth adapter found");
@@ -55,26 +75,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // The event loop is run as a future we control directly, so we can
         // stop it gracefully at any moment (see the `select!` below).
         //
-        // IMPORTANT: CancellationToken is one-shot — once cancelled it stays
-        // cancelled forever, so every loop run needs a brand-new token.
+        // NOTE: a CancellationToken is one-shot — once cancelled it stays
+        // cancelled forever, so every loop run gets a brand-new CHILD token
+        // (which is also cancelled by Ctrl+C via the parent app token).
         let user_requested_stop = {
             let handler = Handler::new().await?;
-            let shutdown_token = CancellationToken::new();
+            let run_token = shutdown_token.child_token();
             let loop_fut =
-                sensor.event_loop(handler, Arc::clone(&paused_loop), shutdown_token.clone());
+                sensor.event_loop(handler, Arc::clone(&paused_loop), run_token.clone());
             tokio::pin!(loop_fut);
 
             let user_requested_stop = tokio::select! {
                 biased;
-                _ = wait_for_stop() => true,
-                _ = &mut loop_fut => false,
+                _ = wait_for_stop() => true,               // 'y' pressed
+                _ = shutdown_token.cancelled() => true,    // Ctrl+C pressed
+                _ = &mut loop_fut => false,                // loop exited on its own
             };
 
             if user_requested_stop {
                 // Graceful shutdown: cancel the token, the loop finishes and
                 // returns LoopExit::Shutdown.
                 info!("stopping the event loop gracefully...");
-                shutdown_token.cancel();
+                run_token.cancel();
                 let exit = (&mut loop_fut).await?;
                 info!("event loop exited: {exit:?}");
             } else {
@@ -95,6 +117,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // The headset is gone: reconnect and restart the event loop.
         warn!("reconnecting...");
         while !sensor.is_connected().await {
+            if shutdown_token.is_cancelled() {
+                info!("Ctrl+C received, exiting");
+                return Ok(());
+            }
             match sensor.connect().await {
                 Err(brainbit::bbit::errors::Error::NoBleAdaptor) => {
                     error!("No Bluetooth adapter found");
@@ -127,7 +153,8 @@ impl EventHandler for Handler {
     }
 }
 
-/// Wait until the user presses 'y' + Enter or Ctrl+C to stop gracefully.
+/// Wait until the user presses 'y' + Enter to stop gracefully.
+/// (Ctrl+C is handled globally by the Ctrl+C handler task in `main`.)
 /// While waiting, periodically prints how many events were received.
 async fn wait_for_stop() {
     let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
@@ -136,10 +163,6 @@ async fn wait_for_stop() {
     loop {
         tokio::select! {
             biased;
-            _ = tokio::signal::ctrl_c() => {
-                println!();
-                return;
-            }
             _ = ticker.tick() => {
                 print!(
                     "\r({} events received) press 'y' or Ctrl+C to stop gracefully ",

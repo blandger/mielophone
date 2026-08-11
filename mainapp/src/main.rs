@@ -50,6 +50,7 @@ async fn main() -> color_eyre::Result<()> {
     }
     debug!("Connected");
 
+    sensor.listen(EventType::State);
     sensor.listen(EventType::EegOrResistance);
 
     let paused_loop = Arc::new(AtomicBool::new(false));
@@ -66,7 +67,7 @@ async fn main() -> color_eyre::Result<()> {
         // IMPORTANT: CancellationToken is one-shot — once cancelled it stays
         // cancelled forever, so every loop run needs a brand-new token.
         let user_requested_stop = {
-            let handler = handler::main_handler::BBitHandler::new(log_file_name).await?;
+            let handler = handler::fw_handler::FileWriteHandler::new(log_file_name).await?;
             let shutdown_token = CancellationToken::new();
             let loop_fut =
                 sensor.event_loop(handler, Arc::clone(&paused_loop), shutdown_token.clone());
