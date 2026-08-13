@@ -1,7 +1,6 @@
 use chrono::Utc;
 use std::fs::File;
 use std::io::Write;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use tracing::{debug, instrument};
 
@@ -42,7 +41,7 @@ impl EventHandler for FileWriteHandler {
     }
 
     #[instrument(skip_all)]
-    async fn eeg_update(&self, ctx: &BBitSensor, eeg_data: Vec<u8>) {
+    async fn eeg_update(&self, _ctx: &BBitSensor, eeg_data: Vec<u8>) {
         let time = Utc::now();
         let mut _formatted: String = time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         _formatted = _formatted.replace("\'", "");

@@ -312,10 +312,11 @@ impl BBitSensor {
         Ok(())
     }
 
-    /// We start measurement (resistance OR eeg) by sending command for one EEG channel and collecting
-    /// returned data.
+    /// Start a measurement of the given type: EEG or electrode resistance on a
+    /// channel. The device only starts streaming data over the subscribed notify
+    /// characteristics after this command is sent.
     #[instrument(skip(self))]
-    async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
+    pub async fn start_measurement(&self, measure_type: DeviceMode) -> BBitResult<()> {
         debug!("Starting an '{measure_type:?}' measurement...");
         let controller = self.controller().await?;
         let device = self.device().await?;

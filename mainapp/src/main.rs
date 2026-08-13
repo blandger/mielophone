@@ -7,6 +7,7 @@ use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use brainbit::bbit::device::BBitSensor;
+use brainbit::bbit::device_mode::DeviceMode;
 use brainbit::bbit::uuids::{EventType, PERIPHERAL_NAME_MATCH_FILTER};
 
 #[tokio::main]
@@ -60,6 +61,11 @@ async fn main() -> color_eyre::Result<()> {
         // BLE subscriptions die with the connection, so (re)subscribe them
         // before every run (after a possible reconnect).
         sensor.build().await?;
+
+        // Ask the device to start streaming. Without this command the headset
+        // stays in the Stop state and never sends EEG/resistance notifications
+        // (restart it on every run, i.e. after a possible reconnect).
+        sensor.start_measurement(DeviceMode::Eeg).await?;
 
         // The event loop is run as a future we control directly, so we can
         // stop it gracefully at any moment (see the `select!` below).

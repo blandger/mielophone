@@ -43,6 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let device_info = sensor.device_info().await.unwrap();
     tracing::info!("{:?}", device_info);
 
+    sensor.stop().await?;
+
     tracing::info!("finished");
 
     Ok(())
